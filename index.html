@@ -173,6 +173,25 @@
       <div id="file-result" class="result">Noch keine Datei ausgewählt.</div>
     </div>
 
+    <!-- Such-Block -->
+    <div class="block">
+      <h2>Suche in den Auswertungen</h2>
+      <div style="display:flex; gap:0.5rem; margin-bottom:0.5rem; flex-wrap:wrap;">
+        <input
+          id="search-input"
+          type="text"
+          placeholder="z. B. ID 72, 5/11, BBU ..."
+          style="flex:1; min-width:180px; padding:0.4rem; border-radius:8px; border:1px solid #b0bec5;"
+        />
+        <button id="search-clear" style="border:none; border-radius:999px; padding:0.4rem 0.9rem; background:#0277bd; color:#fff; cursor:pointer;">
+          Zurücksetzen
+        </button>
+      </div>
+      <div id="search-info" class="result">
+        Geben Sie einen Suchbegriff ein, um die Ergebnis-Blöcke zu filtern.
+      </div>
+    </div>
+
     <!-- Block 1 -->
     <div class="block">
       <h2>1. Anzahl eindeutige Dienste</h2>
@@ -243,7 +262,7 @@
     </div>
     <div class="chat-messages" id="chat-messages">
       <div class="chat-message bot">
-        <span>Hallo! Stelle mir eine Frage zu den Auswertungen, z.&nbsp;B. „Was bedeutet Block 4?“.</span>
+        <span>Hallo! Stellen Sie mir eine Frage zu den Auswertungen, z.&nbsp;B. „Was bedeutet Block 4?“.</span>
       </div>
     </div>
     <div class="chat-input-area">
@@ -415,8 +434,6 @@
         document.getElementById('shift-result').textContent = shText;
 
         // Block 8: Dienste nach Linie/Kurs (mit nächster Zeile derselben ID)
-
-        // 8a) Alle Vorkommen je ID sammeln
         const idOccurrences = new Map(); // id -> [{rowIndex, start, sLoc, course}, ...]
         let currentIdOcc = null;
 
@@ -439,7 +456,7 @@
               idOccurrences.set(currentIdOcc, []);
             }
             idOccurrences.get(currentIdOcc).push({
-              rowIndex: idx + 1, // +1 wegen Header-Zeile
+              rowIndex: idx + 1,
               start,
               sLoc,
               course
@@ -447,7 +464,6 @@
           }
         });
 
-        // 8b) Dienste nach Linie/Kurs gruppieren, ergänzt um rowIndex
         const routeMap2 = new Map();
         let lastId8b = null;
 
@@ -472,7 +488,7 @@
               end,
               sLoc,
               eLoc,
-              rowIndex: idx + 1 // +1 wegen Header-Zeile
+              rowIndex: idx + 1
             });
           }
         });
@@ -505,7 +521,6 @@
               `  ID ${entry.id} ${entry.start} ${entry.sLoc}` +
               ` — ${entry.end} ${entry.eLoc}`;
 
-            // Nächste Zeile derselben ID suchen (nur die erste)
             const occList = idOccurrences.get(entry.id) || [];
             const myPos = occList.findIndex(o => o.rowIndex === entry.rowIndex);
 
@@ -513,7 +528,6 @@
               const next = occList[myPos + 1];
               if (next.start && next.sLoc) {
                 const courseLabel = next.course ? ` ${next.course}` : '';
-                // Erweiterung: | 13:55 HLZ 4/2
                 line += ` | ${next.start} ${next.sLoc}${courseLabel}`;
               }
             }
@@ -527,7 +541,6 @@
         document.getElementById('route-result').textContent = rt.trim();
 
         // Block 9: Pausen zwischen 30 und 120 Minuten (IDs 40–59 und 140–159 werden ignoriert)
-
         const segmentsById = new Map();
         let currentIdP = null;
         let seqCounter = 0;
@@ -539,7 +552,6 @@
             currentIdP = parseInt(idCell, 10);
           }
 
-          // leere Zeile trennt Blöcke
           if (!r.some(c => c != null && c !== '')) {
             currentIdP = null;
             return;
@@ -547,7 +559,6 @@
 
           if (currentIdP == null) return;
 
-          // geteilte Dienste ignorieren
           if (
             (currentIdP >= 40 && currentIdP <= 59) ||
             (currentIdP >= 140 && currentIdP <= 159)
@@ -699,16 +710,6 @@
         appendMessage(text, 'user');
         input.value = '';
 
-        // Hinweis anzeigen, falls keine echte Backend-URL gesetzt ist
-        if (CHAT_API_URL.includes('DEIN-BACKEND-URL')) {
-          appendMessage(
-            'In dieser Version ist noch kein KI-Backend hinterlegt. ' +
-            'Bitte trage deine eigene API-URL im Code (CHAT_API_URL) ein.',
-            'bot'
-          );
-          return;
-        }
-
         try {
           appendMessage('...denke nach...', 'bot');
           const thinkingNode = msgBox.lastChild;
@@ -716,9 +717,7 @@
           const response = await fetch(CHAT_API_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              question: text
-            })
+            body: JSON.stringify({ question: text })
           });
 
           msgBox.removeChild(thinkingNode);
@@ -743,6 +742,70 @@
           sendMessage();
         }
       });
+    })();
+  </script>
+
+  <!-- Suchlogik -->
+  <script>
+    (function() {
+      const searchInput = document.getElementById('search-input');
+      const clearBtn    = document.getElementById('search-clear');
+      const info        = document.getElementById('search-info');
+
+      if (!searchInput || !info) return;
+
+      const resultIds = [
+        'count-result',
+        'shared-result',
+        'reserve-result',
+        'long-result',
+        'loc-result',
+        'segment-result',
+        'shift-result',
+        'route-result',
+        'pause-result'
+      ];
+
+      function applySearch() {
+        const term = searchInput.value.trim().toLowerCase();
+        let hitCount = 0;
+
+        resultIds.forEach(id => {
+          const resEl = document.getElementById(id);
+          if (!resEl) return;
+          const blockEl = resEl.closest('.block') || resEl;
+
+          if (!term) {
+            blockEl.style.display = '';
+            return;
+          }
+
+          const text = resEl.textContent.toLowerCase();
+          if (text.includes(term)) {
+            blockEl.style.display = '';
+            hitCount++;
+          } else {
+            blockEl.style.display = 'none';
+          }
+        });
+
+        if (!term) {
+          info.textContent = 'Geben Sie einen Suchbegriff ein, um die Ergebnis-Blöcke zu filtern.';
+        } else if (hitCount === 0) {
+          info.textContent = `Keine Treffer für „${searchInput.value}“.`;
+        } else {
+          info.textContent = `${hitCount} Block/Blöcke enthalten „${searchInput.value}“.`;
+        }
+      }
+
+      searchInput.addEventListener('input', applySearch);
+
+      if (clearBtn) {
+        clearBtn.addEventListener('click', () => {
+          searchInput.value = '';
+          applySearch();
+        });
+      }
     })();
   </script>
 </body>
