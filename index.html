@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <title>Dienstplan-Analyse (Schritt für Schritt)</title>
+  <!-- Google Font -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Roboto', sans-serif;
+      margin: 0;
+      background: linear-gradient(135deg, #e3f2fd 0%, #e1f5fe 100%);
+      color: #212121;
+      padding: 2rem;
+    }
+    .container { max-width: 900px; margin: 0 auto; }
+    h1 { font-weight: 500; text-align: center; margin-bottom: 2rem; color: #01579b; }
+    .block {
+      background: #ffffff;
+      border-radius: 16px;
+      box-shadow: 0 6px 16px rgba(0,0,0,0.08);
+      padding: 1.75rem;
+      margin-bottom: 1.75rem;
+      transition: transform 0.3s, box-shadow 0.3s;
+    }
+    .block:hover {
+      transform: translateY(-6px);
+      box-shadow: 0 12px 24px rgba(0,0,0,0.12);
+    }
+    .block h2 { margin-top: 0; margin-bottom: 1rem; font-size: 1.25rem; font-weight: 500; color: #0277bd; }
+    .result {
+      background: #f5faff;
+      border-radius: 8px;
+      padding: 1.25rem;
+      font-size: 0.95rem;
+      line-height: 1.4;
+      color: #37474f;
+      white-space: pre-wrap;
+    }
+    input[type="file"] { margin-top: 0.5rem; font-size: 0.95rem; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Dienstplan-Analyse (Schritt für Schritt)</h1>
+
+    <!-- Block 0 -->
+    <div class="block">
+      <h2>0. Datei auswählen</h2>
+      <input id="file-input" type="file" accept=".xlsx,.xls" />
+      <div id="file-result" class="result">Noch keine Datei ausgewählt.</div>
+    </div>
+
+    <!-- Block 1 -->
+    <div class="block">
+      <h2>1. Anzahl eindeutige Dienste</h2>
+      <div id="count-result" class="result">Warte...</div>
+    </div>
+
+    <!-- Block 2 -->
+    <div class="block">
+      <h2>2. Anzahl geteilte Dienste</h2>
+      <div id="shared-result" class="result">Warte...</div>
+    </div>
+
+    <!-- Block 3 -->
+    <div class="block">
+      <h2>3. Reserve Dienste</h2>
+      <p>IDs: 1, 100, 190, 90</p>
+      <div id="reserve-result" class="result">Warte...</div>
+    </div>
+
+    <!-- Block 4 -->
+    <div class="block">
+      <h2>4. Dienste &gt; 08:30h</h2>
+      <div id="long-result" class="result">Warte...</div>
+    </div>
+
+    <!-- Block 5 -->
+    <div class="block">
+      <h2>5. Dienste mit unterschiedlichen Start- und End-Orten</h2>
+      <div id="loc-result" class="result">Warte...</div>
+    </div>
+
+    <!-- Block 6 -->
+    <div class="block">
+      <h2>6. Dienste mit Dienstteilstück &gt;04:30h und Linie/Kurs</h2>
+      <div id="segment-result" class="result">Warte...</div>
+    </div>
+
+    <!-- Block 7 -->
+    <div class="block">
+      <h2>7. Schichtzuweisung anhand des Dienstbeginns</h2>
+      <div id="shift-result" class="result">Warte...</div>
+    </div>
+
+    <!-- Block 8 -->
+    <div class="block">
+      <h2>8. Dienste nach Linie/Kurs</h2>
+      <div id="route-result" class="result">Warte...</div>
+    </div>
+  </div>
+
+  <script>
+    document.getElementById('file-input').addEventListener('change', function() {
+      const file = this.files[0];
+      const blocks = ['count-result','shared-result','reserve-result','long-result','loc-result','segment-result','shift-result','route-result'];
+      document.getElementById('file-result').textContent = file ? `Datei: ${file.name}` : 'Keine Datei ausgewählt.';
+      blocks.forEach(id => document.getElementById(id).textContent = file ? 'Warte auf Auswertung...' : '-');
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+        const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 });
+
+        // Block 1: eindeutige IDs
+        const ids = new Set();
+        for (let i = 1; i < rows.length; i++) {
+          const num = parseInt(rows[i][2], 10);
+          if (!isNaN(num) && num >= 1 && num <= 199) ids.add(num);
+        }
+        document.getElementById('count-result').textContent = `Anzahl eindeutiger Dienst-IDs: ${ids.size}`;
+
+        // Block 2: geteilte Dienste
+        const shared = [...ids].filter(id => (id >= 40 && id <= 59) || (id >= 140 && id <= 159));
+        document.getElementById('shared-result').textContent =
+          `Anzahl geteilte Dienste: ${shared.length}\nIDs: ${shared.join(', ')}`;
+
+        // Block 3: Reserve Dienste
+        const reserveIds = [1,100,190,90];
+        const foundReserve = reserveIds.filter(id => ids.has(id));
+        document.getElementById('reserve-result').textContent =
+          `Anzahl Reserve-Dienste: ${foundReserve.length}\nIDs: ${foundReserve.join(', ')}`;
+
+        // Block 4: Dienste >08:30h ohne Reserve
+        const longSet = new Set();
+        let lastL = null;
+        rows.slice(1).forEach(r => {
+          if (/^\d+$/.test(r[2])) lastL = parseInt(r[2],10);
+          const raw = r[16];
+          if (lastL!=null && typeof raw==='string') {
+            const [h,m] = raw.split(':').map(Number);
+            if (h>8||(h===8&&m>30)) longSet.add(lastL);
+          }
+        });
+        document.getElementById('long-result').textContent =
+          `Dienste >08:30h: ${[...longSet].sort((a,b)=>a-b).join(', ')}`;
+
+        // Block 5: unterschiedliche Orte
+        const eq = new Set(['BBU','BUP','BBN','NSL']);
+        const locSet = new Set();
+        let currentId5 = null, start5 = null;
+        rows.slice(1).concat([[]]).forEach((r,i,a)=>{
+          if (/^\d+$/.test(r[2])) {
+            if (currentId5!=null && start5) {
+              const prev=a[i-1]||[];
+              const end=prev[10]||'';
+              if (end && start5!==end && !(eq.has(start5)&&eq.has(end))) locSet.add(currentId5);
+            }
+            currentId5=parseInt(r[2],10); start5=r[6]||'';
+          } else if (!r.some(c=>c!=null&&c!=='')) {
+            if (currentId5!=null && start5) {
+              const prev=a[i-1]||[];
+              const end=prev[10]||'';
+              if (end && start5!==end && !(eq.has(start5)&&eq.has(end))) locSet.add(currentId5);
+            }
+            currentId5=null; start5=null;
+          }
+        });
+        document.getElementById('loc-result').textContent =
+          `Unterschiedliche Orte: ${[...locSet].sort((a,b)=>a-b).join(', ')}`;
+
+        // Block 6: Dienstteilstücke >04:30h
+        const segMap=new Map(); let cur6=null;
+        rows.slice(1).forEach(r=>{
+          if (/^\d+$/.test(r[2])) cur6=parseInt(r[2],10);
+          const st=r[5], en=r[9], cd=r[4]||'';
+          if (typeof st==='string'&&typeof en==='string') {
+            const m1=st.match(/^(\d{1,2}):(\d{2})$/), m2=en.match(/^(\d{1,2}):(\d{2})$/);
+            if (m1&&m2) {
+              const t1=+m1[1]*60+ +m1[2], t2=+m2[1]*60+ +m2[2];
+              if (t2-t1>270) {
+                if (!segMap.has(cur6)) segMap.set(cur6,new Set());
+                if (cd.trim()) segMap.get(cur6).add(cd.trim());
+              }
+            }
+          }
+        });
+        let segTxt=`Dienstteilstücke >04:30h: ${segMap.size}\n`;
+        [...segMap.entries()].sort((a,b)=>a[0]-b[0]).forEach(([id,codes])=>{
+          segTxt+=`ID ${id}: ${[...codes].join(', ')}\n`;
+        });
+        document.getElementById('segment-result').textContent = segTxt;
+
+        // Block 7: Schichtzuweisung
+        const shiftRules=[
+          {name:'F1',start:170,end:270},{name:'F2',start:271,end:371},
+          {name:'F3',start:372,end:614},{name:'S1',start:615,end:779},
+          {name:'S2',start:780,end:1159},{name:'N',start:1160,end:1440}
+        ];
+        const shiftCount={},assignments=[];let lastId7=null;
+        rows.slice(1).forEach(r=>{
+          if(/^[0-9]+$/.test(r[2])) lastId7=parseInt(r[2],10);
+          const tm=r[5];if(lastId7!=null&&typeof tm==='string'){
+            const m=tm.match(/^(\d{1,2}):(\d{2})$/);if(m){const mins=+m[1]*60+ +m[2];
+            const rule=shiftRules.find(s=>mins>=s.start&&mins<s.end);const nm=rule?rule.name:'Unbekannte';
+            if(!assignments.some(a=>a.id===lastId7)){assignments.push({id:lastId7,shift:nm});shiftCount[nm]=(shiftCount[nm]||0)+1;}}
+        }});
+        let shText='Schichtzählung:\n';Object.entries(shiftCount).forEach(([n,c])=>shText+=`${n}: ${c}\n`);
+        shText+='\nZuteilung:\n';assignments.sort((a,b)=>a.id-b.id).forEach(a=>shText+=`ID ${a.id}: ${a.shift}\n`);
+        document.getElementById('shift-result').textContent = shText;
+
+        // Block 8: Dienste nach Linie/Kurs
+        const routeMap2=new Map();let lastId8b=null;
+        rows.slice(1).forEach(r=>{if(/^[0-9]+$/.test(r[2]))lastId8b=parseInt(r[2],10);
+          const key=r[4];if(typeof key==='string'&&/^[0-9]{1,2}\/\d{1,2}$/.test(key.trim())){
+            const start=r[5]||'',end=r[9]||'',sLoc=r[6]||'',eLoc=r[10]||'';
+            if(!routeMap2.has(key))routeMap2.set(key,[]);
+            routeMap2.get(key).push({id:lastId8b,start,end,sLoc,eLoc});
+        }});
+        const sorted=([...routeMap2.keys()]).sort((a,b)=>{const [l1,c1]=a.split('/').map(Number),[l2,c2]=b.split('/').map(Number);return l1-l2||c1-c2;});
+        let rt='Dienste nach Linie/Kurs:\n';sorted.forEach(key=>{rt+=`${key}:\n`;
+          routeMap2.get(key)
+            .filter(entry=>typeof entry.start==='string'&&/^[0-9]{1,2}:[0-9]{2}$/.test(entry.start))
+            .sort((a,b)=>{const [h1,m1]=a.start.split(':').map(Number),[h2,m2]=b.start.split(':').map(Number);return h1*60+m1-(h2*60+m2);})
+            .forEach(entry=>{rt+=`  ID ${entry.id} | ${entry.start} (${entry.sLoc}) → ${entry.end} (${entry.eLoc})\n`;});
+          rt+='\n';});
+        document.getElementById('route-result').textContent = rt.trim();
+      };
+      reader.readAsArrayBuffer(file);
+    });
+  </script>
+</body>
+</html>
