@@ -247,7 +247,28 @@
       <div id="pause-result" class="result">Warte...</div>
     </div>
   </div>
-
+   
+  <!-- Block 10 -->
+    <div class="block">
+      <h2>10. KI-Fragen zum ausgewerteten Dienstplan</h2>
+      <p>Stellen Sie hier Fragen zur Auswertung, z.&nbsp;B.: „Alles zu ID 122“ oder „Wo taucht Dienst 45 überall auf?“.</p>
+      <textarea
+        id="plan-question"
+        rows="3"
+        placeholder="z. B. Alles zu ID 122, oder: Welche Schicht hat Dienst 87?"
+        style="width:100%; padding:0.5rem; border-radius:8px; border:1px solid #b0bec5; font-family:inherit; font-size:0.95rem; margin-bottom:0.5rem;"
+      ></textarea>
+      <button
+        id="plan-ask"
+        style="border:none; border-radius:999px; padding:0.5rem 1.1rem; background:#0277bd; color:#fff; cursor:pointer; margin-bottom:0.7rem;"
+      >
+        Frage an KI stellen
+      </button>
+      <div id="plan-answer" class="result">
+        Noch keine KI-Anfrage gestellt.
+      </div>
+    </div>
+  
   <!-- KI-Chat Widget -->
   <button class="chat-toggle" id="chat-toggle" title="Fragen zur Auswertung stellen">
     💬
@@ -808,5 +829,128 @@
       }
     })();
   </script>
+    <script>
+    (function () {
+      const askBtn     = document.getElementById('plan-ask');
+      const questionEl = document.getElementById('plan-question');
+      const resultEl   = document.getElementById('plan-answer');
+      if (!askBtn || !questionEl || !resultEl) return;
+
+      // Gleiche Backend-URL wie beim KI-Chat benutzen!
+      // Falls dein Service-Namen anders lautet, HIER anpassen:
+      const CHAT_API_URL = 'https://dienstplan-ki-backend.onrender.com/chat';
+
+      // Mapping: Ergebnis-Element -> "sprechender Block-Name" für die Überschrift
+      const BLOCK_LABELS = {
+        'count-result':   'Block 1 – Anzahl eindeutige Dienste',
+        'shared-result':  'Block 2 – Geteilte Dienste',
+        'reserve-result': 'Block 3 – Reserve Dienste',
+        'long-result':    'Block 4 – Dienste > 08:30h',
+        'loc-result':     'Block 5 – unterschiedliche Start- und End-Orte',
+        'segment-result': 'Block 6 – Dienstteilstücke > 04:30h und Linie/Kurs',
+        'shift-result':   'Block 7 – Schichtzuweisung anhand des Dienstbeginns',
+        'route-result':   'Block 8 – Dienste nach Linie/Kurs',
+        'pause-result':   'Block 9 – Pausen zwischen 30 und 120 Minuten'
+      };
+
+      const ANALYSIS_RESULT_IDS = Object.keys(BLOCK_LABELS);
+
+      // Auswertungstexte gesammelt nach Blöcken holen
+      function collectAnalysisTextByBlock() {
+        const blocks = [];
+        ANALYSIS_RESULT_IDS.forEach(id => {
+          const el = document.getElementById(id);
+          if (!el) return;
+          const text = (el.textContent || '').trim();
+          if (!text || /^Warte/.test(text) || text === '-') return;
+
+          const label = BLOCK_LABELS[id] || id;
+          blocks.push({
+            id,
+            label,
+            text
+          });
+        });
+        return blocks;
+      }
+
+      async function askPlanQuestion() {
+        const userQuestion = questionEl.value.trim();
+        if (!userQuestion) {
+          resultEl.textContent =
+            'Bitte geben Sie eine Frage ein (z. B. „Alles zu ID 122“).';
+          return;
+        }
+
+        const blocks = collectAnalysisTextByBlock();
+        if (!blocks.length) {
+          resultEl.textContent =
+            'Es liegen noch keine Auswertungen vor. Bitte zuerst eine Datei laden, damit die Blöcke 1–9 berechnet werden.';
+          return;
+        }
+
+        resultEl.textContent =
+          'KI wertet die Auswertungen aus und beantwortet Ihre Frage...';
+
+        // Kontext für die KI als Klartext aufbereiten
+        let contextText = '';
+        blocks.forEach(b => {
+          contextText += `${b.label}:\n${b.text}\n\n`;
+        });
+
+        // Prompt so formulieren, dass die Antwort immer nach Blöcken gegliedert ist
+        const prompt =
+          'Du bist eine spezialisierte KI, die Fragen zu einem ausgewerteten Dienstplan beantwortet.\n\n' +
+          'Unten findest du die Auswertungstexte aus mehreren Blöcken (Block 1–9). ' +
+          'Jeder Block hat bereits berechnete Informationen (IDs, Schichten, Linien/Kurse, Pausen etc.).\n\n' +
+          'AUFGABE:\n' +
+          '- Beantworte die Benutzerfrage ausschließlich auf Basis dieser Auswertungen (keine eigenen Daten annehmen).\n' +
+          '- Wenn nach einer konkreten Dienst-ID gefragt wird (z. B. „ID 122“), suche in ALLEN Blöcken nach dieser ID.\n' +
+          '- Strukturiere deine Antwort IMMER mit Überschriften je Block, in dem du Informationen findest.\n' +
+          '- Nutze genau diese Form der Überschriften:\n' +
+          '  * Block 1 – Anzahl eindeutige Dienste\n' +
+          '  * Block 2 – Geteilte Dienste\n' +
+          '  * Block 3 – Reserve Dienste\n' +
+          '  * Block 4 – Dienste > 08:30h\n' +
+          '  * Block 5 – unterschiedliche Start- und End-Orte\n' +
+          '  * Block 6 – Dienstteilstücke > 04:30h und Linie/Kurs\n' +
+          '  * Block 7 – Schichtzuweisung anhand des Dienstbeginns\n' +
+          '  * Block 8 – Dienste nach Linie/Kurs\n' +
+          '  * Block 9 – Pausen zwischen 30 und 120 Minuten\n' +
+          '- Gib NUR die Blöcke aus, in denen du relevante Informationen zur Frage findest.\n' +
+          '- Unter jeder Block-Überschrift liste die Infos in kurzen Stichpunkten auf.\n' +
+          '- Wenn du zu einer ID oder Frage wirklich GAR KEINE Information findest, schreibe dies ausdrücklich.\n\n' +
+          'AUSWERTUNGSTEXTE NACH BLÖCKEN:\n\n' +
+          contextText +
+          '\nFRAGE DES BENUTZERS:\n' +
+          userQuestion +
+          '\n\nANTWORTE NUN strukturiert wie beschrieben:';
+
+        try {
+          const response = await fetch(CHAT_API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ question: prompt })
+          });
+
+          if (!response.ok) {
+            resultEl.textContent =
+              'Fehler bei der Anfrage an das KI-Backend.';
+            return;
+          }
+
+          const data = await response.json();
+          const answer = data.answer || 'Keine Antwort vom KI-Backend erhalten.';
+          resultEl.textContent = answer;
+        } catch (err) {
+          resultEl.textContent =
+            'Es ist ein Verbindungsfehler zum KI-Backend aufgetreten.';
+        }
+      }
+
+      askBtn.addEventListener('click', askPlanQuestion);
+    })();
+  </script>
 </body>
 </html>
+
