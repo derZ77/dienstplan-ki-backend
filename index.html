@@ -42,6 +42,124 @@
       white-space: pre-wrap;
     }
     input[type="file"] { margin-top: 0.5rem; font-size: 0.95rem; }
+
+    /* --- KI-Chat Widget --- */
+    .chat-toggle {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      border: none;
+      background: linear-gradient(135deg, #0288d1, #26c6da);
+      box-shadow: 0 6px 16px rgba(0,0,0,0.25);
+      color: #fff;
+      font-size: 24px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+    .chat-toggle:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 22px rgba(0,0,0,0.3);
+    }
+
+    .chat-window {
+      position: fixed;
+      bottom: 90px;
+      right: 20px;
+      width: 340px;
+      max-height: 460px;
+      display: none;
+      flex-direction: column;
+      background: #ffffff;
+      border-radius: 16px;
+      box-shadow: 0 10px 28px rgba(0,0,0,0.25);
+      z-index: 999;
+      overflow: hidden;
+    }
+    .chat-header {
+      padding: 0.75rem 1rem;
+      background: linear-gradient(135deg, #0277bd, #00acc1);
+      color: #fff;
+      font-weight: 500;
+      font-size: 0.95rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .chat-header span {
+      font-size: 0.85rem;
+      opacity: 0.9;
+    }
+    .chat-close {
+      border: none;
+      background: transparent;
+      color: #fff;
+      font-size: 18px;
+      cursor: pointer;
+    }
+    .chat-messages {
+      padding: 0.75rem 1rem;
+      font-size: 0.9rem;
+      line-height: 1.4;
+      overflow-y: auto;
+      flex: 1;
+      background: #f5faff;
+    }
+    .chat-message {
+      margin-bottom: 0.5rem;
+    }
+    .chat-message.user {
+      text-align: right;
+    }
+    .chat-message.user span {
+      display: inline-block;
+      background: #bbdefb;
+      padding: 0.4rem 0.6rem;
+      border-radius: 12px 12px 0 12px;
+    }
+    .chat-message.bot span {
+      display: inline-block;
+      background: #e1f5fe;
+      padding: 0.4rem 0.6rem;
+      border-radius: 12px 12px 12px 0;
+    }
+    .chat-input-area {
+      border-top: 1px solid #e0e0e0;
+      padding: 0.5rem;
+      background: #fff;
+      display: flex;
+      gap: 0.5rem;
+      align-items: flex-end;
+    }
+    .chat-input-area textarea {
+      flex: 1;
+      resize: none;
+      border-radius: 8px;
+      border: 1px solid #b0bec5;
+      padding: 0.5rem;
+      font-family: inherit;
+      font-size: 0.9rem;
+      min-height: 40px;
+      max-height: 80px;
+    }
+    .chat-input-area button {
+      border: none;
+      border-radius: 999px;
+      padding: 0.4rem 0.9rem;
+      background: #0277bd;
+      color: #fff;
+      font-size: 0.9rem;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .chat-input-area button:hover {
+      background: #01579b;
+    }
   </style>
 </head>
 <body>
@@ -103,19 +221,66 @@
       <h2>8. Dienste nach Linie/Kurs</h2>
       <div id="route-result" class="result">Warte...</div>
     </div>
+
+    <!-- Block 9 -->
+    <div class="block">
+      <h2>9. Pausen zwischen 30 und 120 Minuten</h2>
+      <div id="pause-result" class="result">Warte...</div>
+    </div>
   </div>
 
+  <!-- KI-Chat Widget -->
+  <button class="chat-toggle" id="chat-toggle" title="Fragen zur Auswertung stellen">
+    💬
+  </button>
+  <div class="chat-window" id="chat-window">
+    <div class="chat-header">
+      <div>
+        KI-Hilfe
+        <br><span>Fragen zur Dienstplan-Analyse</span>
+      </div>
+      <button class="chat-close" id="chat-close" aria-label="Chat schließen">×</button>
+    </div>
+    <div class="chat-messages" id="chat-messages">
+      <div class="chat-message bot">
+        <span>Hallo! Stelle mir eine Frage zu den Auswertungen, z.&nbsp;B. „Was bedeutet Block 4?“.</span>
+      </div>
+    </div>
+    <div class="chat-input-area">
+      <textarea id="chat-input" rows="1" placeholder="Frage eingeben..."></textarea>
+      <button id="chat-send">Senden</button>
+    </div>
+  </div>
+
+  <!-- Analyse-Skript Blöcke 1–9 -->
   <script>
     document.getElementById('file-input').addEventListener('change', function() {
       const file = this.files[0];
-      const blocks = ['count-result','shared-result','reserve-result','long-result','loc-result','segment-result','shift-result','route-result'];
-      document.getElementById('file-result').textContent = file ? `Datei: ${file.name}` : 'Keine Datei ausgewählt.';
-      blocks.forEach(id => document.getElementById(id).textContent = file ? 'Warte auf Auswertung...' : '-');
+      const blocks = [
+        'count-result',
+        'shared-result',
+        'reserve-result',
+        'long-result',
+        'loc-result',
+        'segment-result',
+        'shift-result',
+        'route-result',
+        'pause-result'
+      ];
+      document.getElementById('file-result').textContent =
+        file ? `Datei: ${file.name}` : 'Keine Datei ausgewählt.';
+      blocks.forEach(id =>
+        document.getElementById(id).textContent = file ? 'Warte auf Auswertung...' : '-'
+      );
       if (!file) return;
+
       const reader = new FileReader();
       reader.onload = function(e) {
         const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
-        const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 });
+        const rows = XLSX.utils.sheet_to_json(
+          wb.Sheets[wb.SheetNames[0]],
+          { header: 1 }
+        );
 
         // Block 1: eindeutige IDs
         const ids = new Set();
@@ -123,15 +288,18 @@
           const num = parseInt(rows[i][2], 10);
           if (!isNaN(num) && num >= 1 && num <= 199) ids.add(num);
         }
-        document.getElementById('count-result').textContent = `Anzahl eindeutiger Dienst-IDs: ${ids.size}`;
+        document.getElementById('count-result').textContent =
+          `Anzahl eindeutiger Dienst-IDs: ${ids.size}`;
 
         // Block 2: geteilte Dienste
-        const shared = [...ids].filter(id => (id >= 40 && id <= 59) || (id >= 140 && id <= 159));
+        const shared = [...ids].filter(
+          id => (id >= 40 && id <= 59) || (id >= 140 && id <= 159)
+        );
         document.getElementById('shared-result').textContent =
           `Anzahl geteilte Dienste: ${shared.length}\nIDs: ${shared.join(', ')}`;
 
         // Block 3: Reserve Dienste
-        const reserveIds = [1,100,190,90];
+        const reserveIds = [1, 100, 190, 90];
         const foundReserve = reserveIds.filter(id => ids.has(id));
         document.getElementById('reserve-result').textContent =
           `Anzahl Reserve-Dienste: ${foundReserve.length}\nIDs: ${foundReserve.join(', ')}`;
@@ -140,99 +308,442 @@
         const longSet = new Set();
         let lastL = null;
         rows.slice(1).forEach(r => {
-          if (/^\d+$/.test(r[2])) lastL = parseInt(r[2],10);
+          if (/^\d+$/.test(r[2])) lastL = parseInt(r[2], 10);
           const raw = r[16];
-          if (lastL!=null && typeof raw==='string') {
-            const [h,m] = raw.split(':').map(Number);
-            if (h>8||(h===8&&m>30)) longSet.add(lastL);
+          if (lastL != null && typeof raw === 'string') {
+            const [h, m] = raw.split(':').map(Number);
+            if (h > 8 || (h === 8 && m > 30)) longSet.add(lastL);
           }
         });
         document.getElementById('long-result').textContent =
-          `Dienste >08:30h: ${[...longSet].sort((a,b)=>a-b).join(', ')}`;
+          `Dienste >08:30h: ${[...longSet].sort((a, b) => a - b).join(', ')}`;
 
         // Block 5: unterschiedliche Orte
-        const eq = new Set(['BBU','BUP','BBN','NSL']);
+        const eq = new Set(['BBU', 'BUP', 'BBN', 'NSL']);
         const locSet = new Set();
         let currentId5 = null, start5 = null;
-        rows.slice(1).concat([[]]).forEach((r,i,a)=>{
+        rows.slice(1).concat([[]]).forEach((r, i, a) => {
           if (/^\d+$/.test(r[2])) {
-            if (currentId5!=null && start5) {
-              const prev=a[i-1]||[];
-              const end=prev[10]||'';
-              if (end && start5!==end && !(eq.has(start5)&&eq.has(end))) locSet.add(currentId5);
+            if (currentId5 != null && start5) {
+              const prev = a[i - 1] || [];
+              const end = prev[10] || '';
+              if (end && start5 !== end && !(eq.has(start5) && eq.has(end))) {
+                locSet.add(currentId5);
+              }
             }
-            currentId5=parseInt(r[2],10); start5=r[6]||'';
-          } else if (!r.some(c=>c!=null&&c!=='')) {
-            if (currentId5!=null && start5) {
-              const prev=a[i-1]||[];
-              const end=prev[10]||'';
-              if (end && start5!==end && !(eq.has(start5)&&eq.has(end))) locSet.add(currentId5);
+            currentId5 = parseInt(r[2], 10);
+            start5 = r[6] || '';
+          } else if (!r.some(c => c != null && c !== '')) {
+            if (currentId5 != null && start5) {
+              const prev = a[i - 1] || [];
+              const end = prev[10] || '';
+              if (end && start5 !== end && !(eq.has(start5) && eq.has(end))) {
+                locSet.add(currentId5);
+              }
             }
-            currentId5=null; start5=null;
+            currentId5 = null;
+            start5 = null;
           }
         });
         document.getElementById('loc-result').textContent =
-          `Unterschiedliche Orte: ${[...locSet].sort((a,b)=>a-b).join(', ')}`;
+          `Unterschiedliche Orte: ${[...locSet].sort((a, b) => a - b).join(', ')}`;
 
         // Block 6: Dienstteilstücke >04:30h
-        const segMap=new Map(); let cur6=null;
-        rows.slice(1).forEach(r=>{
-          if (/^\d+$/.test(r[2])) cur6=parseInt(r[2],10);
-          const st=r[5], en=r[9], cd=r[4]||'';
-          if (typeof st==='string'&&typeof en==='string') {
-            const m1=st.match(/^(\d{1,2}):(\d{2})$/), m2=en.match(/^(\d{1,2}):(\d{2})$/);
-            if (m1&&m2) {
-              const t1=+m1[1]*60+ +m1[2], t2=+m2[1]*60+ +m2[2];
-              if (t2-t1>270) {
-                if (!segMap.has(cur6)) segMap.set(cur6,new Set());
+        const segMap = new Map();
+        let cur6 = null;
+        rows.slice(1).forEach(r => {
+          if (/^\d+$/.test(r[2])) cur6 = parseInt(r[2], 10);
+          const st = r[5], en = r[9], cd = r[4] || '';
+          if (typeof st === 'string' && typeof en === 'string') {
+            const m1 = st.match(/^(\d{1,2}):(\d{2})$/);
+            const m2 = en.match(/^(\d{1,2}):(\d{2})$/);
+            if (m1 && m2) {
+              const t1 = +m1[1] * 60 + +m1[2];
+              const t2 = +m2[1] * 60 + +m2[2];
+              if (t2 - t1 > 270) {
+                if (!segMap.has(cur6)) segMap.set(cur6, new Set());
                 if (cd.trim()) segMap.get(cur6).add(cd.trim());
               }
             }
           }
         });
-        let segTxt=`Dienstteilstücke >04:30h: ${segMap.size}\n`;
-        [...segMap.entries()].sort((a,b)=>a[0]-b[0]).forEach(([id,codes])=>{
-          segTxt+=`ID ${id}: ${[...codes].join(', ')}\n`;
+        let segTxt = `Dienstteilstücke >04:30h: ${segMap.size}\n`;
+        [...segMap.entries()].sort((a, b) => a[0] - b[0]).forEach(([id, codes]) => {
+          segTxt += `ID ${id}: ${[...codes].join(', ')}\n`;
         });
         document.getElementById('segment-result').textContent = segTxt;
 
         // Block 7: Schichtzuweisung
-        const shiftRules=[
-          {name:'F1',start:170,end:270},{name:'F2',start:271,end:371},
-          {name:'F3',start:372,end:614},{name:'S1',start:615,end:779},
-          {name:'S2',start:780,end:1159},{name:'N',start:1160,end:1440}
+        const shiftRules = [
+          { name: 'F1', start: 170, end: 270 },
+          { name: 'F2', start: 271, end: 371 },
+          { name: 'F3', start: 372, end: 614 },
+          { name: 'S1', start: 615, end: 779 },
+          { name: 'S2', start: 780, end: 1159 },
+          { name: 'N',  start: 1160, end: 1440 }
         ];
-        const shiftCount={},assignments=[];let lastId7=null;
-        rows.slice(1).forEach(r=>{
-          if(/^[0-9]+$/.test(r[2])) lastId7=parseInt(r[2],10);
-          const tm=r[5];if(lastId7!=null&&typeof tm==='string'){
-            const m=tm.match(/^(\d{1,2}):(\d{2})$/);if(m){const mins=+m[1]*60+ +m[2];
-            const rule=shiftRules.find(s=>mins>=s.start&&mins<s.end);const nm=rule?rule.name:'Unbekannte';
-            if(!assignments.some(a=>a.id===lastId7)){assignments.push({id:lastId7,shift:nm});shiftCount[nm]=(shiftCount[nm]||0)+1;}}
-        }});
-        let shText='Schichtzählung:\n';Object.entries(shiftCount).forEach(([n,c])=>shText+=`${n}: ${c}\n`);
-        shText+='\nZuteilung:\n';assignments.sort((a,b)=>a.id-b.id).forEach(a=>shText+=`ID ${a.id}: ${a.shift}\n`);
+        const shiftCount = {};
+        const assignments = [];
+        let lastId7 = null;
+
+        rows.slice(1).forEach(r => {
+          if (/^[0-9]+$/.test(r[2])) lastId7 = parseInt(r[2], 10);
+          const tm = r[5];
+          if (lastId7 != null && typeof tm === 'string') {
+            const m = tm.match(/^(\d{1,2}):(\d{2})$/);
+            if (m) {
+              const mins = +m[1] * 60 + +m[2];
+              const rule = shiftRules.find(s => mins >= s.start && mins < s.end);
+              const nm = rule ? rule.name : 'Unbekannte';
+              if (!assignments.some(a => a.id === lastId7)) {
+                assignments.push({ id: lastId7, shift: nm });
+                shiftCount[nm] = (shiftCount[nm] || 0) + 1;
+              }
+            }
+          }
+        });
+        let shText = 'Schichtzählung:\n';
+        Object.entries(shiftCount).forEach(([n, c]) => {
+          shText += `${n}: ${c}\n`;
+        });
+        shText += '\nZuteilung:\n';
+        assignments
+          .sort((a, b) => a.id - b.id)
+          .forEach(a => {
+            shText += `ID ${a.id}: ${a.shift}\n`;
+          });
         document.getElementById('shift-result').textContent = shText;
 
-        // Block 8: Dienste nach Linie/Kurs
-        const routeMap2=new Map();let lastId8b=null;
-        rows.slice(1).forEach(r=>{if(/^[0-9]+$/.test(r[2]))lastId8b=parseInt(r[2],10);
-          const key=r[4];if(typeof key==='string'&&/^[0-9]{1,2}\/\d{1,2}$/.test(key.trim())){
-            const start=r[5]||'',end=r[9]||'',sLoc=r[6]||'',eLoc=r[10]||'';
-            if(!routeMap2.has(key))routeMap2.set(key,[]);
-            routeMap2.get(key).push({id:lastId8b,start,end,sLoc,eLoc});
-        }});
-        const sorted=([...routeMap2.keys()]).sort((a,b)=>{const [l1,c1]=a.split('/').map(Number),[l2,c2]=b.split('/').map(Number);return l1-l2||c1-c2;});
-        let rt='Dienste nach Linie/Kurs:\n';sorted.forEach(key=>{rt+=`${key}:\n`;
-          routeMap2.get(key)
-            .filter(entry=>typeof entry.start==='string'&&/^[0-9]{1,2}:[0-9]{2}$/.test(entry.start))
-            .sort((a,b)=>{const [h1,m1]=a.start.split(':').map(Number),[h2,m2]=b.start.split(':').map(Number);return h1*60+m1-(h2*60+m2);})
-            .forEach(entry=>{rt+=`  ID ${entry.id} | ${entry.start} (${entry.sLoc}) → ${entry.end} (${entry.eLoc})\n`;});
-          rt+='\n';});
+        // Block 8: Dienste nach Linie/Kurs (mit nächster Zeile derselben ID)
+
+        // 8a) Alle Vorkommen je ID sammeln
+        const idOccurrences = new Map(); // id -> [{rowIndex, start, sLoc, course}, ...]
+        let currentIdOcc = null;
+
+        rows.slice(1).forEach((r, idx) => {
+          if (/^\d+$/.test(r[2])) currentIdOcc = parseInt(r[2], 10);
+
+          const start = r[5];
+          const sLoc = r[6] || '';
+          const courseRaw = r[4];
+          const hasValidTime =
+            typeof start === 'string' && /^[0-9]{1,2}:[0-9]{2}$/.test(start);
+          const course =
+            typeof courseRaw === 'string' &&
+            /^[0-9]{1,2}\/\d{1,2}$/.test(courseRaw.trim())
+              ? courseRaw.trim()
+              : '';
+
+          if (currentIdOcc != null && hasValidTime) {
+            if (!idOccurrences.has(currentIdOcc)) {
+              idOccurrences.set(currentIdOcc, []);
+            }
+            idOccurrences.get(currentIdOcc).push({
+              rowIndex: idx + 1, // +1 wegen Header-Zeile
+              start,
+              sLoc,
+              course
+            });
+          }
+        });
+
+        // 8b) Dienste nach Linie/Kurs gruppieren, ergänzt um rowIndex
+        const routeMap2 = new Map();
+        let lastId8b = null;
+
+        rows.slice(1).forEach((r, idx) => {
+          if (/^[0-9]+$/.test(r[2])) lastId8b = parseInt(r[2], 10);
+          const keyRaw = r[4];
+
+          if (
+            typeof keyRaw === 'string' &&
+            /^[0-9]{1,2}\/\d{1,2}$/.test(keyRaw.trim())
+          ) {
+            const key = keyRaw.trim();
+            const start = r[5] || '';
+            const end = r[9] || '';
+            const sLoc = r[6] || '';
+            const eLoc = r[10] || '';
+
+            if (!routeMap2.has(key)) routeMap2.set(key, []);
+            routeMap2.get(key).push({
+              id: lastId8b,
+              start,
+              end,
+              sLoc,
+              eLoc,
+              rowIndex: idx + 1 // +1 wegen Header-Zeile
+            });
+          }
+        });
+
+        const sortedKeys = [...routeMap2.keys()].sort((a, b) => {
+          const [l1, c1] = a.split('/').map(Number);
+          const [l2, c2] = b.split('/').map(Number);
+          return l1 - l2 || c1 - c2;
+        });
+
+        let rt = 'Dienste nach Linie/Kurs:\n';
+        sortedKeys.forEach(key => {
+          rt += `${key}:\n`;
+
+          const entries = routeMap2
+            .get(key)
+            .filter(
+              entry =>
+                typeof entry.start === 'string' &&
+                /^[0-9]{1,2}:[0-9]{2}$/.test(entry.start)
+            )
+            .sort((a, b) => {
+              const [h1, m1] = a.start.split(':').map(Number);
+              const [h2, m2] = b.start.split(':').map(Number);
+              return h1 * 60 + m1 - (h2 * 60 + m2);
+            });
+
+          entries.forEach(entry => {
+            let line =
+              `  ID ${entry.id} ${entry.start} ${entry.sLoc}` +
+              ` — ${entry.end} ${entry.eLoc}`;
+
+            // Nächste Zeile derselben ID suchen (nur die erste)
+            const occList = idOccurrences.get(entry.id) || [];
+            const myPos = occList.findIndex(o => o.rowIndex === entry.rowIndex);
+
+            if (myPos !== -1 && myPos + 1 < occList.length) {
+              const next = occList[myPos + 1];
+              if (next.start && next.sLoc) {
+                const courseLabel = next.course ? ` ${next.course}` : '';
+                // Erweiterung: | 13:55 HLZ 4/2
+                line += ` | ${next.start} ${next.sLoc}${courseLabel}`;
+              }
+            }
+
+            rt += line + '\n';
+          });
+
+          rt += '\n';
+        });
+
         document.getElementById('route-result').textContent = rt.trim();
+
+        // Block 9: Pausen zwischen 30 und 120 Minuten (IDs 40–59 und 140–159 werden ignoriert)
+
+        const segmentsById = new Map();
+        let currentIdP = null;
+        let seqCounter = 0;
+
+        rows.slice(1).forEach(r => {
+          const idCell = r[2];
+
+          if (/^\d+$/.test(idCell)) {
+            currentIdP = parseInt(idCell, 10);
+          }
+
+          // leere Zeile trennt Blöcke
+          if (!r.some(c => c != null && c !== '')) {
+            currentIdP = null;
+            return;
+          }
+
+          if (currentIdP == null) return;
+
+          // geteilte Dienste ignorieren
+          if (
+            (currentIdP >= 40 && currentIdP <= 59) ||
+            (currentIdP >= 140 && currentIdP <= 159)
+          ) {
+            return;
+          }
+
+          const startStr = r[5];
+          const endStr = r[9];
+
+          if (
+            typeof startStr !== 'string' ||
+            typeof endStr !== 'string' ||
+            !/^[0-9]{1,2}:[0-9]{2}$/.test(startStr) ||
+            !/^[0-9]{1,2}:[0-9]{2}$/.test(endStr)
+          ) {
+            return;
+          }
+
+          const [sh, sm] = startStr.split(':').map(Number);
+          const [eh, em] = endStr.split(':').map(Number);
+          const startMin = sh * 60 + sm;
+          const endMin = eh * 60 + em;
+
+          const startLoc = r[6] || '';
+          const endLoc = r[10] || '';
+          const courseRaw = r[4];
+          const course =
+            typeof courseRaw === 'string' && courseRaw.trim()
+              ? courseRaw.trim()
+              : '';
+
+          if (!segmentsById.has(currentIdP)) {
+            segmentsById.set(currentIdP, []);
+          }
+
+          segmentsById.get(currentIdP).push({
+            seq: seqCounter++,
+            startMin,
+            endMin,
+            startStr,
+            endStr,
+            startLoc,
+            endLoc,
+            course
+          });
+        });
+
+        const pauses = [];
+
+        for (const [id, segs] of segmentsById.entries()) {
+          segs.sort((a, b) => a.seq - b.seq);
+
+          for (let i = 0; i < segs.length - 1; i++) {
+            const from = segs[i];
+            const to = segs[i + 1];
+
+            const gap = to.startMin - from.endMin;
+
+            if (gap > 30 && gap < 120) {
+              pauses.push({ id, from, to, gap });
+            }
+          }
+        }
+
+        let pText = 'Pausen zwischen 30 und 120 Minuten:\n\n';
+
+        if (pauses.length === 0) {
+          pText += 'Keine Pausen im Bereich 30–120 Minuten gefunden.';
+        } else {
+          const uniqueIds = [...new Set(pauses.map(p => p.id))].sort(
+            (a, b) => a - b
+          );
+
+          const formatCourse = c => {
+            const cc = (c || '').trim();
+            return /^[0-9]{1,2}\/\d{1,2}$/.test(cc) ? ` (${cc})` : '';
+          };
+
+          uniqueIds.forEach(id => {
+            const list = pauses.filter(p => p.id === id);
+            pText += `ID ${id}:\n`;
+
+            list.forEach(p => {
+              const from = p.from;
+              const to = p.to;
+
+              const fromCourse = formatCourse(from.course);
+              const toCourse = formatCourse(to.course);
+
+              const fromLoc = from.endLoc || '';
+              const toLoc = to.startLoc || '';
+
+              pText +=
+                `  Pause: ${from.endStr} ${fromLoc}${fromCourse}` +
+                ` → ${to.startStr} ${toLoc}${toCourse}` +
+                ` | ${p.gap} min\n`;
+            });
+
+            pText += '\n';
+          });
+        }
+
+        document.getElementById('pause-result').textContent = pText.trim();
       };
+
       reader.readAsArrayBuffer(file);
     });
+  </script>
+
+  <!-- KI-Chat Logik -->
+  <script>
+    (function() {
+      const CHAT_API_URL = 'https://dienstplan-ki-backend.onrender.com/chat'; // hier deine Backend-URL eintragen
+
+      const toggleBtn = document.getElementById('chat-toggle');
+      const chatWin   = document.getElementById('chat-window');
+      const closeBtn  = document.getElementById('chat-close');
+      const msgBox    = document.getElementById('chat-messages');
+      const input     = document.getElementById('chat-input');
+      const sendBtn   = document.getElementById('chat-send');
+
+      function appendMessage(text, who) {
+        const div = document.createElement('div');
+        div.className = 'chat-message ' + (who === 'user' ? 'user' : 'bot');
+        const span = document.createElement('span');
+        span.textContent = text;
+        div.appendChild(span);
+        msgBox.appendChild(div);
+        msgBox.scrollTop = msgBox.scrollHeight;
+      }
+
+      function toggleChat() {
+        const visible = chatWin.style.display === 'flex';
+        chatWin.style.display = visible ? 'none' : 'flex';
+        if (!visible) {
+          input.focus();
+        }
+      }
+
+      toggleBtn.addEventListener('click', toggleChat);
+      closeBtn.addEventListener('click', () => {
+        chatWin.style.display = 'none';
+      });
+
+      async function sendMessage() {
+        const text = input.value.trim();
+        if (!text) return;
+        appendMessage(text, 'user');
+        input.value = '';
+
+        // Hinweis anzeigen, falls keine echte Backend-URL gesetzt ist
+        if (CHAT_API_URL.includes('DEIN-BACKEND-URL')) {
+          appendMessage(
+            'In dieser Version ist noch kein KI-Backend hinterlegt. ' +
+            'Bitte trage deine eigene API-URL im Code (CHAT_API_URL) ein.',
+            'bot'
+          );
+          return;
+        }
+
+        try {
+          appendMessage('...denke nach...', 'bot');
+          const thinkingNode = msgBox.lastChild;
+
+          const response = await fetch(CHAT_API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              question: text
+            })
+          });
+
+          msgBox.removeChild(thinkingNode);
+
+          if (!response.ok) {
+            appendMessage('Fehler bei der Anfrage an das KI-Backend.', 'bot');
+            return;
+          }
+
+          const data = await response.json();
+          const answer = data.answer || 'Keine Antwort vom Backend erhalten.';
+          appendMessage(answer, 'bot');
+        } catch (err) {
+          appendMessage('Es ist ein Verbindungsfehler zum KI-Backend aufgetreten.', 'bot');
+        }
+      }
+
+      sendBtn.addEventListener('click', sendMessage);
+      input.addEventListener('keydown', e => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          sendMessage();
+        }
+      });
+    })();
   </script>
 </body>
 </html>
