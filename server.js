@@ -6,9 +6,14 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// OpenAI-Client, API-Key kommt aus Umgebungsvariable
+// OpenAI-Client – API-Key kommt aus Render-Env: OPENAI_API_KEY
 const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
+});
+
+// einfache Test-Route
+app.get("/", (req, res) => {
+  res.send("Dienstplan-KI-Backend läuft.");
 });
 
 app.post("/chat", async (req, res) => {
@@ -16,13 +21,13 @@ app.post("/chat", async (req, res) => {
     const userQuestion = req.body.question || "";
 
     const completion = await client.chat.completions.create({
-      model: "gpt-4.1-mini",   // oder ein anderes aktuelles Modell
+      model: "gpt-4.1-mini",   // passt gut für solche Zwecke
       messages: [
         {
           role: "system",
           content:
-            "Du bist eine deutschsprachige KI-Hilfe für die Dienstplan-Analyse. " +
-            "Erkläre Dinge knapp, klar und freundlich."
+            "Du bist eine deutschsprachige KI-Hilfe für Dienstplan-Analysen. " +
+            "Antworte kurz, klar und verständlich."
         },
         {
           role: "user",
@@ -31,7 +36,9 @@ app.post("/chat", async (req, res) => {
       ]
     });
 
-    const answer = completion.choices?.[0]?.message?.content || "Keine Antwort erhalten.";
+    const answer =
+      completion.choices?.[0]?.message?.content ||
+      "Keine Antwort vom KI-Modell erhalten.";
     res.json({ answer });
   } catch (err) {
     console.error("Fehler im /chat-Endpunkt:", err);
@@ -39,7 +46,7 @@ app.post("/chat", async (req, res) => {
   }
 });
 
-// Render stellt PORT als Umgebungsvariable bereit
+// Render stellt PORT als Env-Variable bereit
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log("KI-Backend läuft auf Port " + PORT);
