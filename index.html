@@ -322,27 +322,52 @@
           { header: 1 }
         );
 
-        // Block 1: eindeutige IDs
-        const ids = new Set();
-        for (let i = 1; i < rows.length; i++) {
-          const num = parseInt(rows[i][2], 10);
-          if (!isNaN(num) && num >= 1 && num <= 199) ids.add(num);
+            // Block 1: eindeutige IDs
+      // Alle positiven numerischen Dienstnummern berücksichtigen (inkl. 1101ff, 2101ff usw.)
+      const ids = new Set();
+      for (let i = 1; i < rows.length; i++) {
+        const num = parseInt(rows[i][2], 10);  // Spalte C
+        if (!isNaN(num) && num >= 1) {
+          ids.add(num);
         }
-        document.getElementById('count-result').textContent =
-          `Anzahl eindeutiger Dienst-IDs: ${ids.size}`;
+      }
+      document.getElementById('count-result').textContent =
+        `Anzahl eindeutiger Dienst-IDs: ${ids.size}`;
 
-        // Block 2: geteilte Dienste
-        const shared = [...ids].filter(
-          id => (id >= 40 && id <= 59) || (id >= 140 && id <= 159)
+      // Block 2: geteilte Dienste
+      // Alte + neue Bereiche für geteilte Dienste:
+      // 40–59, 140–159, 1140–1159, 1240–1259, 2140–2159, 2240–2259
+      function isSharedService(id) {
+        return (
+          (id >= 40   && id <= 59)   ||  // ursprüngliche geteilte Dienste
+          (id >= 140  && id <= 159)  ||  // ursprüngliche geteilte Dienste
+          (id >= 1140 && id <= 1159) ||  // Mo–Fr Schule Straßenbahn geteilt
+          (id >= 1240 && id <= 1259) ||  // Mo–Fr Ferien Straßenbahn geteilt
+          (id >= 2140 && id <= 2159) ||  // Mo–Fr Schule Bus geteilt
+          (id >= 2240 && id <= 2259)     // Mo–Fr Ferien Bus geteilt
         );
-        document.getElementById('shared-result').textContent =
-          `Anzahl geteilte Dienste: ${shared.length}\nIDs: ${shared.join(', ')}`;
+      }
 
-        // Block 3: Reserve Dienste
-        const reserveIds = [1, 100, 190, 90];
-        const foundReserve = reserveIds.filter(id => ids.has(id));
-        document.getElementById('reserve-result').textContent =
-          `Anzahl Reserve-Dienste: ${foundReserve.length}\nIDs: ${foundReserve.join(', ')}`;
+      const shared = [...ids].filter(id => isSharedService(id));
+      document.getElementById('shared-result').textContent =
+        `Anzahl geteilte Dienste: ${shared.length}\nIDs: ${shared.sort((a,b)=>a-b).join(', ')}`;
+
+      // Block 3: Reserve Dienste
+      // Bisherige + neue Reserve-Dienstnummern:
+      // 1, 90, 100, 190,
+      // 1101, 1102, 1201, 1202, 1301, 1302, 1401, 1402,
+      // 2101, 2102, 2201, 2202, 2301, 2302, 2401, 2402
+      const reserveIds = [
+        1, 100, 190, 90,          // ursprüngliche Reserve
+        1101, 1102, 1201, 1202,   // Mo–Fr Schule / Ferien Straßenbahn
+        1301, 1302, 1401, 1402,   // Sa / So Straßenbahn
+        2101, 2102, 2201, 2202,   // Mo–Fr Schule / Ferien Bus
+        2301, 2302, 2401, 2402    // Sa / So Bus
+      ];
+
+      const foundReserve = reserveIds.filter(id => ids.has(id));
+      document.getElementById('reserve-result').textContent =
+        `Anzahl Reserve-Dienste: ${foundReserve.length}\nIDs: ${foundReserve.sort((a,b)=>a-b).join(', ')}`;
 
         // Block 4: Dienste >08:30h ohne Reserve
         const longSet = new Set();
