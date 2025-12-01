@@ -880,129 +880,256 @@ document.getElementById('shared-result').textContent = sharedText;
 
         document.getElementById('route-result').textContent = rt.trim();
 
-        // Block 9: Pausen zwischen 30 und 120 Minuten (IDs 40–59 und 140–159 werden ignoriert)
-        const segmentsById = new Map();
-        let currentIdP = null;
-        let seqCounter = 0;
+         // Block 9: Pausen zwischen 30 und 120 Minuten
+        // Regeln:
+        // - Es werden Pausen zwischen 30 und 120 Minuten gesucht (Ende J -> Beginn F)
+        // - Geteilte Dienste 40–59 und 140–159 werden ignoriert
+        // - Pausenort HLZ/TGR/LGR: mindestens 39 Minuten, sonst mindestens 33 Minuten
+        // - BV-Regel: Mindestens eine Pause, deren vorhergehende Arbeitszeit (Spalte O -> J)
+        //   zwischen 3,5 h und 4,5 h liegt.
+        //   Bei Diensten mit 3 Dienstteilen und 2 Pausen wird für die zweite Pause
+        //   die Arbeitszeit von O des 1. Dienstteils bis J des 2. Dienstteils berechnet.
 
-        rows.slice(1).forEach(r => {
+        function parseTimeToMin9(str) {
+          if (typeof str !== 'string') return null;
+          const m = str.match(/^(\d{1,2}):(\d{2})$/);
+          if (!m) return null;
+          const h = parseInt(m[1], 10);
+          const mi = parseInt(m[2], 10);
+          if (isNaN(h) || isNaN(mi)) return null;
+          return h * 60 + mi;
+        }
+
+        function diffMinutesOverMidnight9(startMin, endMin) {
+          if (startMin == null || endMin == null) return null;
+          let diff = endMin - startMin;
+          if (diff < 0) diff += 24 * 60;
+          return diff;
+        }
+
+        function formatMinutesToHHMM9(totalMin) {
+          if (totalMin == null) return '';
+          const h = Math.floor(totalMin / 60);
+          const m = totalMin % 60;
+          return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+        }
+
+        function formatCourse9(courseStr) {
+          const c = (courseStr || '').trim();
+          if (!c) return '';
+          return ` (${c})`;
+        }
+
+        function isIgnoredSplitService9(id) {
+          return (id >= 40 && id <= 59) || (id >= 140 && id <= 159);
+        }
+
+        const SPECIAL_LOCATIONS9 = ['HLZ', 'TGR', 'LGR'];
+        const MIN_BV_9 = 3.5 * 60; // 210
+        const MAX_BV_9 = 4.5 * 60; // 270
+
+        // Dienstteilstücke je Dienst-ID einsammeln (ohne geteilte Dienste 40–59, 140–159)
+        const segmentsById9 = new Map();
+        let currentId9 = null;
+        let seqCounter9 = 0;
+
+        rows.slice(1).forEach((r, idx) => {
           const idCell = r[2];
 
           if (/^\d+$/.test(idCell)) {
-            currentIdP = parseInt(idCell, 10);
+            currentId9 = parseInt(idCell, 10);
           }
 
+          // komplett leere Zeile beendet die Dienstverfolgung
           if (!r.some(c => c != null && c !== '')) {
-            currentIdP = null;
+            currentId9 = null;
             return;
           }
 
-          if (currentIdP == null) return;
+          if (currentId9 == null) return;
 
-          if (
-            (currentIdP >= 40 && currentIdP <= 59) ||
-            (currentIdP >= 140 && currentIdP <= 159)
-          ) {
-            return;
+          const id = currentId9;
+
+          // geteilte Dienste 40–59 und 140–159 ignorieren
+          if (isIgnoredSplitService9(id)) return;
+
+          const startStr = r[5];   // Spalte F
+          const endStr   = r[9];   // Spalte J
+          const startMin = parseTimeToMin9(startStr);
+          const endMin   = parseTimeToMin9(endStr);
+          if (startMin == null || endMin == null) return;
+
+          const startLoc = r[6]  || ''; // Spalte G
+          const endLoc   = r[10] || ''; // Spalte K
+          const course   = (r[4] || '').trim(); // Spalte E
+
+          if (!segmentsById9.has(id)) {
+            segmentsById9.set(id, []);
           }
 
-          const startStr = r[5];
-          const endStr = r[9];
-
-          if (
-            typeof startStr !== 'string' ||
-            typeof endStr !== 'string' ||
-            !/^[0-9]{1,2}:[0-9]{2}$/.test(startStr) ||
-            !/^[0-9]{1,2}:[0-9]{2}$/.test(endStr)
-          ) {
-            return;
-          }
-
-          const [sh, sm] = startStr.split(':').map(Number);
-          const [eh, em] = endStr.split(':').map(Number);
-          const startMin = sh * 60 + sm;
-          const endMin = eh * 60 + em;
-
-          const startLoc = r[6] || '';
-          const endLoc = r[10] || '';
-          const courseRaw = r[4];
-          const course =
-            typeof courseRaw === 'string' && courseRaw.trim()
-              ? courseRaw.trim()
-              : '';
-
-          if (!segmentsById.has(currentIdP)) {
-            segmentsById.set(currentIdP, []);
-          }
-
-          segmentsById.get(currentIdP).push({
-            seq: seqCounter++,
+          segmentsById9.get(id).push({
+            seq: ++seqCounter9,
             startMin,
             endMin,
             startStr,
             endStr,
             startLoc,
             endLoc,
-            course
+            course,
+            rowIndex: idx + 1 // Index in rows[]
           });
         });
 
-        const pauses = [];
+        // Pausen zwischen Dienstteilstücken ermitteln (30–120 Minuten)
+        const pauses9 = [];
 
-        for (const [id, segs] of segmentsById.entries()) {
+        for (const [id, segs] of segmentsById9.entries()) {
           segs.sort((a, b) => a.seq - b.seq);
 
           for (let i = 0; i < segs.length - 1; i++) {
             const from = segs[i];
-            const to = segs[i + 1];
+            const to   = segs[i + 1];
 
-            const gap = to.startMin - from.endMin;
+            const gap = diffMinutesOverMidnight9(from.endMin, to.startMin);
+            if (gap == null) continue;
 
-            if (gap > 30 && gap < 120) {
-              pauses.push({ id, from, to, gap });
+            // Nur 30–120 Minuten berücksichtigen
+            if (gap >= 30 && gap <= 120) {
+              // Arbeitszeit vor der Pause:
+              // Standard: Spalte O -> J des Dienstteils "from"
+              // Sonderfall: genau 3 Dienstteile und dies ist die zweite Pause (i === 1),
+              // dann von O des ersten Dienstteils bis J des zweiten Dienstteils.
+              let workDurMin = null;
+              let workDurStr = '';
+              let workInRange = false;
+              let workUnknown = false;
+
+              let workStartRowIndex = from.rowIndex;
+              let workEndRowIndex   = from.rowIndex;
+
+              if (segs.length === 3 && i === 1) {
+                // zweite Pause bei 3 Dienstteilen: 1. Teil (Index 0) -> 2. Teil (Index 1)
+                workStartRowIndex = segs[0].rowIndex;
+                workEndRowIndex   = segs[1].rowIndex;
+              }
+
+              const rowStart = rows[workStartRowIndex] || null;
+              const rowEnd   = rows[workEndRowIndex] || null;
+
+              if (rowStart && rowEnd) {
+                const workStartStr = rowStart[14]; // Spalte O
+                const workEndStr   = rowEnd[9];    // Spalte J
+
+                const workStartMin = parseTimeToMin9(workStartStr);
+                const workEndMin   = parseTimeToMin9(workEndStr);
+                const wDur         = diffMinutesOverMidnight9(workStartMin, workEndMin);
+
+                if (wDur != null) {
+                  workDurMin = wDur;
+                  workDurStr = formatMinutesToHHMM9(wDur);
+                  workInRange = wDur >= MIN_BV_9 && wDur <= MAX_BV_9;
+                } else {
+                  workUnknown = true;
+                }
+              } else {
+                workUnknown = true;
+              }
+
+              pauses9.push({
+                id,
+                from,
+                to,
+                gap,
+                workDurMin,
+                workDurStr,
+                workInRange,
+                workUnknown
+              });
             }
           }
         }
 
         let pText = 'Pausen zwischen 30 und 120 Minuten:\n\n';
 
-        if (pauses.length === 0) {
+        if (pauses9.length === 0) {
           pText += 'Keine Pausen im Bereich 30–120 Minuten gefunden.';
         } else {
-          const uniqueIds = [...new Set(pauses.map(p => p.id))].sort(
+          const uniqueIds9 = [...new Set(pauses9.map(p => p.id))].sort(
             (a, b) => a - b
           );
 
-          const formatCourse = c => {
-            const cc = (c || '').trim();
-            return /^[0-9]{1,2}\/\d{1,2}$/.test(cc) ? ` (${cc})` : '';
-          };
+          uniqueIds9.forEach(id => {
+            const list = pauses9
+              .filter(p => p.id === id)
+              .sort((a, b) => a.from.startMin - b.from.startMin);
 
-          uniqueIds.forEach(id => {
-            const list = pauses.filter(p => p.id === id);
             pText += `ID ${id}:\n`;
+
+            const hasBVConform = list.some(p => p.workInRange);
 
             list.forEach(p => {
               const from = p.from;
-              const to = p.to;
+              const to   = p.to;
 
-              const fromCourse = formatCourse(from.course);
-              const toCourse = formatCourse(to.course);
+              const fromCourse = formatCourse9(from.course);
+              const toCourse   = formatCourse9(to.course);
 
-              const fromLoc = from.endLoc || '';
-              const toLoc = to.startLoc || '';
+              const fromLoc = (from.endLoc   || '').trim();
+              const toLoc   = (to.startLoc   || '').trim();
+              const pauseLoc = (fromLoc || toLoc).toUpperCase();
+
+              // Mindestpause je Pausenort
+              const isSpecial   = SPECIAL_LOCATIONS9.includes(pauseLoc);
+              const requiredMin = isSpecial ? 39 : 33;
+              let pauseHint = '';
+
+              if (p.gap < requiredMin) {
+                pauseHint =
+                  ` (zu kurz, Mindestpause am Ort ${pauseLoc || 'unbekannt'}: ${requiredMin} min)`;
+              } else {
+                pauseHint =
+                  ` (Mindestpause erfüllt: ${requiredMin} min)`;
+              }
+
+              // Arbeitszeit vor der Pause (nur kommentieren, BV-Verstoß erst am Ende je Dienst)
+              let workHint = '';
+              if (p.workUnknown) {
+                workHint =
+                  ' (Arbeitszeit vor Pause aus Spalte O/J nicht auswertbar)';
+              } else if (p.workInRange) {
+                workHint =
+                  ` (Arbeitszeit vor Pause ${p.workDurStr} – im Bereich 03:30 bis 04:30 Stunden)`;
+              } else {
+                workHint =
+                  ` (Arbeitszeit vor Pause ${p.workDurStr} – außerhalb 03:30 bis 04:30 Stunden)`;
+              }
 
               pText +=
                 `  Pause: ${from.endStr} ${fromLoc}${fromCourse}` +
                 ` → ${to.startStr} ${toLoc}${toCourse}` +
-                ` | ${p.gap} min\n`;
+                ` | ${p.gap} min` +
+                `${pauseHint}${workHint}\n`;
             });
 
-            pText += '\n';
+            // Zusammenfassender BV-Hinweis pro Dienst
+            if (list.some(p => !p.workUnknown)) {
+              if (hasBVConform) {
+                pText +=
+                  '  -> BV-Hinweis: Mindestens eine Pause mit vorangehender Arbeitszeit zwischen 03:30 und 04:30 Stunden vorhanden (BV-konform).\n\n';
+              } else {
+                pText +=
+                  '  -> BV-Hinweis: Keine Pause mit vorangehender Arbeitszeit zwischen 03:30 und 04:30 Stunden – Dienst nicht BV-konform.\n\n';
+              }
+            } else {
+              pText +=
+                '  -> BV-Hinweis: Arbeitszeiten vor Pausen (Spalte O/J) nicht auswertbar.\n\n';
+            }
           });
         }
 
         document.getElementById('pause-result').textContent = pText.trim();
+
+
       };
 
       reader.readAsArrayBuffer(file);
