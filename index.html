@@ -334,23 +334,123 @@
       document.getElementById('count-result').textContent =
         `Anzahl eindeutiger Dienst-IDs: ${ids.size}`;
 
-      // Block 2: geteilte Dienste
-      // Alte + neue Bereiche für geteilte Dienste:
-      // 40–59, 140–159, 1140–1159, 1240–1259, 2140–2159, 2240–2259
-      function isSharedService(id) {
-        return (
-          (id >= 40   && id <= 59)   ||  // ursprüngliche geteilte Dienste
-          (id >= 140  && id <= 159)  ||  // ursprüngliche geteilte Dienste
-          (id >= 1140 && id <= 1159) ||  // Mo–Fr Schule Straßenbahn geteilt
-          (id >= 1240 && id <= 1259) ||  // Mo–Fr Ferien Straßenbahn geteilt
-          (id >= 2140 && id <= 2159) ||  // Mo–Fr Schule Bus geteilt
-          (id >= 2240 && id <= 2259)     // Mo–Fr Ferien Bus geteilt
-        );
-      }
+// Block 2: geteilte Dienste mit Schichtdauer-Prüfung (O/P, max. 12:00h)
 
-      const shared = [...ids].filter(id => isSharedService(id));
-      document.getElementById('shared-result').textContent =
-        `Anzahl geteilte Dienste: ${shared.length}\nIDs: ${shared.sort((a,b)=>a-b).join(', ')}`;
+// Bereiche für geteilte Dienste:
+// 40–59, 140–159, 1140–1159, 1240–1259, 2140–2159, 2240–2259
+function isSharedService(id) {
+  return (
+    (id >= 40   && id <= 59)   ||  // ursprüngliche geteilte Dienste
+    (id >= 140  && id <= 159)  ||  // ursprüngliche geteilte Dienste
+    (id >= 1140 && id <= 1159) ||  // Mo–Fr Schule Straßenbahn geteilt
+    (id >= 1240 && id <= 1259) ||  // Mo–Fr Ferien Straßenbahn geteilt
+    (id >= 2140 && id <= 2159) ||  // Mo–Fr Schule Bus geteilt
+    (id >= 2240 && id <= 2259)     // Mo–Fr Ferien Bus geteilt
+  );
+}
+
+// HH:MM -> Minuten
+function parseTimeToMinutes(str) {
+  if (typeof str !== 'string') return null;
+  const m = str.match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return null;
+  const h = parseInt(m[1], 10);
+  const mi = parseInt(m[2], 10);
+  if (isNaN(h) || isNaN(mi)) return null;
+  return h * 60 + mi;
+}
+
+const sharedIds = [...ids].filter(id => isSharedService(id));
+const sharedIdsSorted = sharedIds.slice().sort((a, b) => a - b);
+const sharedSet = new Set(sharedIdsSorted);
+
+// Für jede geteilte ID: erste Zeit aus Spalte O (Index 14) und
+// letzte Zeit aus Spalte P (Index 15) bestimmen
+const sharedInfo = new Map(); // id -> { minStart, maxEnd }
+let currentIdShared = null;
+
+for (let i = 1; i < rows.length; i++) {
+  const row = rows[i];
+
+  const idCell = row[2];
+  if (/^\d+$/.test(idCell)) {
+    currentIdShared = parseInt(idCell, 10);
+  }
+
+  if (!sharedSet.has(currentIdShared)) continue;
+
+  const startStr = row[14]; // Spalte O
+  const endStr   = row[15]; // Spalte P
+
+  const startMin = parseTimeToMinutes(startStr);
+  const endMin   = parseTimeToMinutes(endStr);
+
+  if (!sharedInfo.has(currentIdShared)) {
+    sharedInfo.set(currentIdShared, { minStart: null, maxEnd: null });
+  }
+  const info = sharedInfo.get(currentIdShared);
+
+  if (startMin !== null) {
+    if (info.minStart === null || startMin < info.minStart) {
+      info.minStart = startMin;
+    }
+  }
+
+  if (endMin !== null) {
+    if (info.maxEnd === null || endMin > info.maxEnd) {
+      info.maxEnd = endMin;
+    }
+  }
+}
+
+// Auswertung: Schichtdauer und Prüfung > 12:00h
+const over12 = [];
+const lines = [];
+
+sharedIdsSorted.forEach(id => {
+  const info = sharedInfo.get(id);
+  if (!info || info.minStart === null || info.maxEnd === null) {
+    lines.push(`ID ${id}: keine gültigen Zeiten in Spalte O/P gefunden`);
+    return;
+  }
+
+  let diff = info.maxEnd - info.minStart;
+
+  // über Mitternacht
+  if (diff < 0) diff += 24 * 60;
+
+  const h = Math.floor(diff / 60);
+  const m = diff % 60;
+  const durStr = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+
+  lines.push(`ID ${id}: Schichtdauer ${durStr} (Spalte O → P)`);
+
+  if (diff > 12 * 60) {
+    over12.push(`ID ${id} (${durStr})`);
+  }
+});
+
+let sharedText =
+  `Anzahl geteilte Dienste: ${sharedIdsSorted.length}\n` +
+  `IDs: ${sharedIdsSorted.join(', ')}`;
+
+if (sharedIdsSorted.length > 0) {
+  sharedText +=
+    `\n\nSchichtdauer je geteilter Dienst (erste Zeit in Spalte O bis letzte Zeit in Spalte P):\n` +
+    lines.join('\n');
+}
+
+if (sharedIdsSorted.length === 0) {
+  sharedText += `\n\nKeine geteilten Dienste gefunden.`;
+} else if (over12.length === 0) {
+  sharedText += `\n\nAlle geteilten Dienste liegen bei maximal 12:00h Schichtdauer.`;
+} else {
+  sharedText +=
+    `\n\nAchtung: folgende geteilte Dienste überschreiten 12:00h Schichtdauer:\n` +
+    over12.join(', ');
+}
+
+document.getElementById('shared-result').textContent = sharedText;
 
       // Block 3: Reserve Dienste
       // Bisherige + neue Reserve-Dienstnummern:
@@ -413,32 +513,183 @@
         document.getElementById('loc-result').textContent =
           `Unterschiedliche Orte: ${[...locSet].sort((a, b) => a - b).join(', ')}`;
 
-        // Block 6: Dienstteilstücke >04:30h
-        const segMap = new Map();
-        let cur6 = null;
+        // Block 6: Dienstteilstücke >04:30h und Hinweis bei >06:00h
+        // - Reserve-Dienste werden nicht berücksichtigt
+        // - Nachtdienste über 0:00 Uhr werden korrekt bewertet
+        // - Dienstteile mit Pause <30 min zwischen zwei Stücken werden kombiniert geprüft
+
+        const reserveIdSet = new Set(reserveIds || []);
+
+        function diffMinutes(startMin, endMin) {
+          // Differenz in Minuten, korrekt über Mitternacht
+          let diff = endMin - startMin;
+          if (diff < 0) diff += 24 * 60;
+          return diff;
+        }
+
+        function formatDuration(totalMin) {
+          const h = Math.floor(totalMin / 60);
+          const m = totalMin % 60;
+          return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+        }
+
+        function formatCourseLabel(c) {
+          const cc = (c || '').trim();
+          // Linie/Kurs in Form 5/11 usw.
+          if (/^[0-9]{1,2}\/\d{1,2}$/.test(cc)) return ` (${cc})`;
+          return cc ? ` (${cc})` : '';
+        }
+
+        // Alle Dienstteilstücke je ID sammeln (ohne Reserve-Dienste)
+        const segmentsById6 = new Map();
+        let currentId6 = null;
+
         rows.slice(1).forEach(r => {
-          if (/^\d+$/.test(r[2])) cur6 = parseInt(r[2], 10);
-          const st = r[5], en = r[9], cd = r[4] || '';
-          if (typeof st === 'string' && typeof en === 'string') {
-            const m1 = st.match(/^(\d{1,2}):(\d{2})$/);
-            const m2 = en.match(/^(\d{1,2}):(\d{2})$/);
-            if (m1 && m2) {
-              const t1 = +m1[1] * 60 + +m1[2];
-              const t2 = +m2[1] * 60 + +m2[2];
-              if (t2 - t1 > 270) {
-                if (!segMap.has(cur6)) segMap.set(cur6, new Set());
-                if (cd.trim()) segMap.get(cur6).add(cd.trim());
+          const idCell = r[2];
+
+          if (/^\d+$/.test(idCell)) {
+            currentId6 = parseInt(idCell, 10);
+          }
+
+          // komplett leere Zeile beendet den Dienst
+          if (!r.some(c => c != null && c !== '')) {
+            currentId6 = null;
+            return;
+          }
+
+          if (currentId6 == null) return;
+
+          // Reserve-Dienste für diese Auswertung ignorieren
+          if (reserveIdSet.has(currentId6)) return;
+
+          const startStr = r[5];
+          const endStr   = r[9];
+
+          if (
+            typeof startStr !== 'string' ||
+            typeof endStr !== 'string' ||
+            !/^[0-9]{1,2}:[0-9]{2}$/.test(startStr) ||
+            !/^[0-9]{1,2}:[0-9]{2}$/.test(endStr)
+          ) {
+            return;
+          }
+
+          const [sh, sm] = startStr.split(':').map(Number);
+          const [eh, em] = endStr.split(':').map(Number);
+          const startMin = sh * 60 + sm;
+          const endMin   = eh * 60 + em;
+
+          const courseRaw = r[4];
+          const course =
+            typeof courseRaw === 'string' && courseRaw.trim()
+              ? courseRaw.trim()
+              : '';
+
+          if (!segmentsById6.has(currentId6)) {
+            segmentsById6.set(currentId6, []);
+          }
+
+          // Reihenfolge der Zeilen beibehalten (Excel ist chronologisch)
+          segmentsById6.get(currentId6).push({
+            startMin,
+            endMin,
+            startStr,
+            endStr,
+            course
+          });
+        });
+
+        // Auswertung: >4:30h und >6:00h (inkl. kombinierter Dienstteile)
+        const over45ById = new Map(); // id -> Array Textzeilen zu diesem Dienst
+        const idsOver6   = new Set(); // Dienste mit mind. einem Segment >6h
+
+        segmentsById6.forEach((segs, id) => {
+          if (!segs.length) return;
+
+          const lines = [];
+
+          // 1) Einzelsegmente prüfen
+          for (let i = 0; i < segs.length; i++) {
+            const s = segs[i];
+            const dur = diffMinutes(s.startMin, s.endMin); // korrekt über Mitternacht
+            if (dur > 270) { // >4:30h
+              const durStr      = formatDuration(dur);
+              const courseLabel = formatCourseLabel(s.course);
+              lines.push(
+                `  Einzelsegment ${s.startStr}–${s.endStr}${courseLabel} | Dauer ${durStr}`
+              );
+              if (dur > 360) { // >6:00h
+                idsOver6.add(id);
               }
             }
           }
-        });
-        let segTxt = `Dienstteilstücke >04:30h: ${segMap.size}\n`;
-        [...segMap.entries()].sort((a, b) => a[0] - b[0]).forEach(([id, codes]) => {
-          segTxt += `ID ${id}: ${[...codes].join(', ')}\n`;
-        });
-        document.getElementById('segment-result').textContent = segTxt;
 
-        // Block 7: Schichtzuweisung
+          // 2) Kombinierte Dienstteile: Pause <30 Minuten zwischen zwei Stücken
+          // (gilt auch für Dienste mit 3 oder mehr Dienstteilen)
+          for (let i = 0; i < segs.length - 1; i++) {
+            const a = segs[i];
+            const b = segs[i + 1];
+
+            const gap = diffMinutes(a.endMin, b.startMin); // Pause zwischen Ende a und Beginn b
+            if (gap < 30) {
+              const durComb = diffMinutes(a.startMin, b.endMin);
+              if (durComb > 270) { // >4:30h kombiniert
+                const durStr = formatDuration(durComb);
+
+                const courses = [a.course, b.course]
+                  .filter(c => c && c.trim())
+                  .map(c => c.trim());
+                const courseInfo = courses.length
+                  ? ` (${courses.join(' / ')})`
+                  : '';
+
+                lines.push(
+                  `  Kombiniert: ${a.startStr}–${a.endStr} und ${b.startStr}–${b.endStr}${courseInfo}` +
+                  ` | Pause ${gap} Min, Gesamtdauer ${durStr}`
+                );
+
+                if (durComb > 360) { // >6:00h kombiniert
+                  idsOver6.add(id);
+                }
+              }
+            }
+          }
+
+          if (lines.length) {
+            over45ById.set(id, lines);
+          }
+        });
+
+        let segTxt =
+          `Dienstteilstücke >04:30h (ohne Reserve-Dienste, inkl. kombinierter Teile mit Pause <30 Min): ` +
+          `${over45ById.size}\n`;
+
+        if (over45ById.size === 0) {
+          segTxt += '\nKeine relevanten Dienstteilstücke gefunden.';
+        } else {
+          segTxt += '\n';
+
+          [...over45ById.entries()]
+            .sort((a, b) => a[0] - b[0])
+            .forEach(([id, lines]) => {
+              segTxt += `ID ${id}:\n`;
+              lines.forEach(line => {
+                segTxt += line + '\n';
+              });
+
+              if (idsOver6.has(id)) {
+                segTxt +=
+                  '  Hinweis: Bitte Fahrtafel prüfen ob 1/6 Dienst und Standzeiten ausreichen.\n';
+              }
+
+              segTxt += '\n';
+            });
+        }
+
+        document.getElementById('segment-result').textContent = segTxt.trim();
+
+
+         // Block 7: Schichtzuweisung inkl. separater Ausweisung geteilter Dienste (GF1, GF2, ...)
         const shiftRules = [
           { name: 'F1', start: 170, end: 270 },
           { name: 'F2', start: 271, end: 371 },
@@ -447,37 +698,80 @@
           { name: 'S2', start: 780, end: 1159 },
           { name: 'N',  start: 1160, end: 1440 }
         ];
-        const shiftCount = {};
-        const assignments = [];
+
+        const shiftCount = {};          // alle Dienste nach F1, F2, ...
+        const sharedShiftCount = {};    // nur geteilte Dienste, z.B. GF1, GF2, ...
+        const assignments = [];         // je Dienst: zugewiesene Schicht
         let lastId7 = null;
 
+        // Set der geteilten Dienste (aus Block 2)
+        const sharedIdSet = new Set([...ids].filter(id => isSharedService(id)));
+
         rows.slice(1).forEach(r => {
-          if (/^[0-9]+$/.test(r[2])) lastId7 = parseInt(r[2], 10);
-          const tm = r[5];
+          if (/^[0-9]+$/.test(r[2])) {
+            lastId7 = parseInt(r[2], 10);
+          }
+
+          const tm = r[5]; // Spalte F: Dienstbeginn
           if (lastId7 != null && typeof tm === 'string') {
             const m = tm.match(/^(\d{1,2}):(\d{2})$/);
             if (m) {
-              const mins = +m[1] * 60 + +m[2];
+              const mins = parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
               const rule = shiftRules.find(s => mins >= s.start && mins < s.end);
-              const nm = rule ? rule.name : 'Unbekannte';
+              const baseName = rule ? rule.name : 'Unbekannte';
+
+              // Pro Dienst-ID nur einmal zuweisen (erster gefundener Dienstbeginn)
               if (!assignments.some(a => a.id === lastId7)) {
-                assignments.push({ id: lastId7, shift: nm });
-                shiftCount[nm] = (shiftCount[nm] || 0) + 1;
+                const isShared = sharedIdSet.has(lastId7);
+                let finalName = baseName;
+
+                // geteilte Dienste bekommen eigene Schichtlage GF1, GF2, ...
+                if (isShared && baseName !== 'Unbekannte') {
+                  finalName = 'G' + baseName;
+                }
+
+                assignments.push({ id: lastId7, shift: finalName, isShared });
+
+                // Gesamtzählung nach Grund-Schichtlage (F1, F2, ...)
+                shiftCount[baseName] = (shiftCount[baseName] || 0) + 1;
+
+                // separate Zählung geteilte Dienste nach GF1, GF2, ...
+                if (isShared && baseName !== 'Unbekannte') {
+                  sharedShiftCount[finalName] = (sharedShiftCount[finalName] || 0) + 1;
+                }
               }
             }
           }
         });
-        let shText = 'Schichtzählung:\n';
-        Object.entries(shiftCount).forEach(([n, c]) => {
-          shText += `${n}: ${c}\n`;
-        });
-        shText += '\nZuteilung:\n';
+
+        let shText = 'Schichtzählung (alle Dienste nach F1, F2, F3, S1, S2, N):\n';
+        Object.entries(shiftCount)
+          .sort((a, b) => a[0].localeCompare(b[0], 'de'))
+          .forEach(([name, count]) => {
+            shText += `${name}: ${count}\n`;
+          });
+
+        shText += '\nGeteilte Dienste mit separater Schichtlage (GF1, GF2, ...):\n';
+        const sharedKeys = Object.keys(sharedShiftCount);
+        if (sharedKeys.length === 0) {
+          shText += 'Keine geteilten Dienste mit zugewiesener Schichtlage gefunden.\n';
+        } else {
+          sharedKeys
+            .sort((a, b) => a.localeCompare(b, 'de'))
+            .forEach(name => {
+              shText += `${name}: ${sharedShiftCount[name]}\n`;
+            });
+        }
+
+        shText += '\nZuteilung je Dienst-ID:\n';
         assignments
           .sort((a, b) => a.id - b.id)
           .forEach(a => {
-            shText += `ID ${a.id}: ${a.shift}\n`;
+            shText += `ID ${a.id}: ${a.shift}${a.isShared ? ' (geteilt)' : ''}\n`;
           });
-        document.getElementById('shift-result').textContent = shText;
+
+        document.getElementById('shift-result').textContent = shText.trim();
+
 
         // Block 8: Dienste nach Linie/Kurs (mit nächster Zeile derselben ID)
         const idOccurrences = new Map(); // id -> [{rowIndex, start, sLoc, course}, ...]
@@ -978,4 +1272,3 @@
   </script>
 </body>
 </html>
-
