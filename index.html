@@ -1,0 +1,981 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <title>Dienstplan-Analyse (Schritt für Schritt)</title>
+  <!-- Google Font -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Roboto', sans-serif;
+      margin: 0;
+      background: linear-gradient(135deg, #e3f2fd 0%, #e1f5fe 100%);
+      color: #212121;
+      padding: 2rem;
+    }
+    .container { max-width: 900px; margin: 0 auto; }
+    h1 { font-weight: 500; text-align: center; margin-bottom: 2rem; color: #01579b; }
+    .block {
+      background: #ffffff;
+      border-radius: 16px;
+      box-shadow: 0 6px 16px rgba(0,0,0,0.08);
+      padding: 1.75rem;
+      margin-bottom: 1.75rem;
+      transition: transform 0.3s, box-shadow 0.3s;
+    }
+    .block:hover {
+      transform: translateY(-6px);
+      box-shadow: 0 12px 24px rgba(0,0,0,0.12);
+    }
+    .block h2 { margin-top: 0; margin-bottom: 1rem; font-size: 1.25rem; font-weight: 500; color: #0277bd; }
+    .result {
+      background: #f5faff;
+      border-radius: 8px;
+      padding: 1.25rem;
+      font-size: 0.95rem;
+      line-height: 1.4;
+      color: #37474f;
+      white-space: pre-wrap;
+    }
+    input[type="file"] { margin-top: 0.5rem; font-size: 0.95rem; }
+
+    /* --- KI-Chat Widget --- */
+    .chat-toggle {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      border: none;
+      background: linear-gradient(135deg, #0288d1, #26c6da);
+      box-shadow: 0 6px 16px rgba(0,0,0,0.25);
+      color: #fff;
+      font-size: 24px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+    .chat-toggle:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 22px rgba(0,0,0,0.3);
+    }
+
+    .chat-window {
+      position: fixed;
+      bottom: 90px;
+      right: 20px;
+      width: 340px;
+      max-height: 460px;
+      display: none;
+      flex-direction: column;
+      background: #ffffff;
+      border-radius: 16px;
+      box-shadow: 0 10px 28px rgba(0,0,0,0.25);
+      z-index: 999;
+      overflow: hidden;
+    }
+    .chat-header {
+      padding: 0.75rem 1rem;
+      background: linear-gradient(135deg, #0277bd, #00acc1);
+      color: #fff;
+      font-weight: 500;
+      font-size: 0.95rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .chat-header span {
+      font-size: 0.85rem;
+      opacity: 0.9;
+    }
+    .chat-close {
+      border: none;
+      background: transparent;
+      color: #fff;
+      font-size: 18px;
+      cursor: pointer;
+    }
+    .chat-messages {
+      padding: 0.75rem 1rem;
+      font-size: 0.9rem;
+      line-height: 1.4;
+      overflow-y: auto;
+      flex: 1;
+      background: #f5faff;
+    }
+    .chat-message {
+      margin-bottom: 0.5rem;
+    }
+    .chat-message.user {
+      text-align: right;
+    }
+    .chat-message.user span {
+      display: inline-block;
+      background: #bbdefb;
+      padding: 0.4rem 0.6rem;
+      border-radius: 12px 12px 0 12px;
+    }
+    .chat-message.bot span {
+      display: inline-block;
+      background: #e1f5fe;
+      padding: 0.4rem 0.6rem;
+      border-radius: 12px 12px 12px 0;
+    }
+    .chat-input-area {
+      border-top: 1px solid #e0e0e0;
+      padding: 0.5rem;
+      background: #fff;
+      display: flex;
+      gap: 0.5rem;
+      align-items: flex-end;
+    }
+    .chat-input-area textarea {
+      flex: 1;
+      resize: none;
+      border-radius: 8px;
+      border: 1px solid #b0bec5;
+      padding: 0.5rem;
+      font-family: inherit;
+      font-size: 0.9rem;
+      min-height: 40px;
+      max-height: 80px;
+    }
+    .chat-input-area button {
+      border: none;
+      border-radius: 999px;
+      padding: 0.4rem 0.9rem;
+      background: #0277bd;
+      color: #fff;
+      font-size: 0.9rem;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .chat-input-area button:hover {
+      background: #01579b;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Dienstplan-Analyse (Schritt für Schritt)</h1>
+
+    <!-- Block 0 -->
+    <div class="block">
+      <h2>0. Datei auswählen</h2>
+      <input id="file-input" type="file" accept=".xlsx,.xls" />
+      <div id="file-result" class="result">Noch keine Datei ausgewählt.</div>
+    </div>
+
+    <!-- Such-Block -->
+    <div class="block">
+      <h2>Suche in den Auswertungen</h2>
+      <div style="display:flex; gap:0.5rem; margin-bottom:0.5rem; flex-wrap:wrap;">
+        <input
+          id="search-input"
+          type="text"
+          placeholder="z. B. ID 72, 5/11, BBU ..."
+          style="flex:1; min-width:180px; padding:0.4rem; border-radius:8px; border:1px solid #b0bec5;"
+        />
+        <button id="search-clear" style="border:none; border-radius:999px; padding:0.4rem 0.9rem; background:#0277bd; color:#fff; cursor:pointer;">
+          Zurücksetzen
+        </button>
+      </div>
+      <div id="search-info" class="result">
+        Geben Sie einen Suchbegriff ein, um die Ergebnis-Blöcke zu filtern.
+      </div>
+    </div>
+
+    <!-- Block 1 -->
+    <div class="block">
+      <h2>1. Anzahl eindeutige Dienste</h2>
+      <div id="count-result" class="result">Warte...</div>
+    </div>
+
+    <!-- Block 2 -->
+    <div class="block">
+      <h2>2. Anzahl geteilte Dienste</h2>
+      <div id="shared-result" class="result">Warte...</div>
+    </div>
+
+    <!-- Block 3 -->
+    <div class="block">
+      <h2>3. Reserve Dienste</h2>
+      <p>IDs: 1, 100, 190, 90, 1101, 1102, 1201, 1202, 2101, 2102, 2201, 2202</p>
+      <div id="reserve-result" class="result">Warte...</div>
+    </div>
+
+    <!-- Block 4 -->
+    <div class="block">
+      <h2>4. Dienste &gt; 08:30h</h2>
+      <div id="long-result" class="result">Warte...</div>
+    </div>
+
+    <!-- Block 5 -->
+    <div class="block">
+      <h2>5. Dienste mit unterschiedlichen Start- und End-Orten</h2>
+      <div id="loc-result" class="result">Warte...</div>
+    </div>
+
+    <!-- Block 6 -->
+    <div class="block">
+      <h2>6. Dienste mit Dienstteilstück &gt;04:30h und Linie/Kurs</h2>
+      <div id="segment-result" class="result">Warte...</div>
+    </div>
+
+    <!-- Block 7 -->
+    <div class="block">
+      <h2>7. Schichtzuweisung anhand des Dienstbeginns</h2>
+      <div id="shift-result" class="result">Warte...</div>
+    </div>
+
+    <!-- Block 8 -->
+    <div class="block">
+      <h2>8. Dienste nach Linie/Kurs</h2>
+      <div id="route-result" class="result">Warte...</div>
+    </div>
+
+    <!-- Block 9 -->
+    <div class="block">
+      <h2>9. Pausen zwischen 30 und 120 Minuten</h2>
+      <div id="pause-result" class="result">Warte...</div>
+    </div>
+  </div>
+   
+  <!-- Block 10 -->
+    <div class="block">
+      <h2>10. KI-Fragen zum ausgewerteten Dienstplan</h2>
+      <p>Stellen Sie hier Fragen zur Auswertung, z.&nbsp;B.: „Alles zu ID 122“ oder „Wo taucht Dienst 45 überall auf?“.</p>
+      <textarea
+        id="plan-question"
+        rows="3"
+        placeholder="z. B. Alles zu ID 122, oder: Welche Schicht hat Dienst 87?"
+        style="width:100%; padding:0.5rem; border-radius:8px; border:1px solid #b0bec5; font-family:inherit; font-size:0.95rem; margin-bottom:0.5rem;"
+      ></textarea>
+      <button
+        id="plan-ask"
+        style="border:none; border-radius:999px; padding:0.5rem 1.1rem; background:#0277bd; color:#fff; cursor:pointer; margin-bottom:0.7rem;"
+      >
+        Frage an KI stellen
+      </button>
+      <div id="plan-answer" class="result">
+        Noch keine KI-Anfrage gestellt.
+      </div>
+    </div>
+  
+  <!-- KI-Chat Widget -->
+  <button class="chat-toggle" id="chat-toggle" title="Fragen zur Auswertung stellen">
+    💬
+  </button>
+  <div class="chat-window" id="chat-window">
+    <div class="chat-header">
+      <div>
+        KI-Hilfe
+        <br><span>Fragen zur Dienstplan-Analyse</span>
+      </div>
+      <button class="chat-close" id="chat-close" aria-label="Chat schließen">×</button>
+    </div>
+    <div class="chat-messages" id="chat-messages">
+      <div class="chat-message bot">
+        <span>Hallo! Stellen Sie mir eine Frage zu den Auswertungen, z.&nbsp;B. „Was bedeutet Block 4?“.</span>
+      </div>
+    </div>
+    <div class="chat-input-area">
+      <textarea id="chat-input" rows="1" placeholder="Frage eingeben..."></textarea>
+      <button id="chat-send">Senden</button>
+    </div>
+  </div>
+
+  <!-- Analyse-Skript Blöcke 1–9 -->
+  <script>
+    document.getElementById('file-input').addEventListener('change', function() {
+      const file = this.files[0];
+      const blocks = [
+        'count-result',
+        'shared-result',
+        'reserve-result',
+        'long-result',
+        'loc-result',
+        'segment-result',
+        'shift-result',
+        'route-result',
+        'pause-result'
+      ];
+      document.getElementById('file-result').textContent =
+        file ? `Datei: ${file.name}` : 'Keine Datei ausgewählt.';
+      blocks.forEach(id =>
+        document.getElementById(id).textContent = file ? 'Warte auf Auswertung...' : '-'
+      );
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+        const rows = XLSX.utils.sheet_to_json(
+          wb.Sheets[wb.SheetNames[0]],
+          { header: 1 }
+        );
+
+            // Block 1: eindeutige IDs
+      // Alle positiven numerischen Dienstnummern berücksichtigen (inkl. 1101ff, 2101ff usw.)
+      const ids = new Set();
+      for (let i = 1; i < rows.length; i++) {
+        const num = parseInt(rows[i][2], 10);  // Spalte C
+        if (!isNaN(num) && num >= 1) {
+          ids.add(num);
+        }
+      }
+      document.getElementById('count-result').textContent =
+        `Anzahl eindeutiger Dienst-IDs: ${ids.size}`;
+
+      // Block 2: geteilte Dienste
+      // Alte + neue Bereiche für geteilte Dienste:
+      // 40–59, 140–159, 1140–1159, 1240–1259, 2140–2159, 2240–2259
+      function isSharedService(id) {
+        return (
+          (id >= 40   && id <= 59)   ||  // ursprüngliche geteilte Dienste
+          (id >= 140  && id <= 159)  ||  // ursprüngliche geteilte Dienste
+          (id >= 1140 && id <= 1159) ||  // Mo–Fr Schule Straßenbahn geteilt
+          (id >= 1240 && id <= 1259) ||  // Mo–Fr Ferien Straßenbahn geteilt
+          (id >= 2140 && id <= 2159) ||  // Mo–Fr Schule Bus geteilt
+          (id >= 2240 && id <= 2259)     // Mo–Fr Ferien Bus geteilt
+        );
+      }
+
+      const shared = [...ids].filter(id => isSharedService(id));
+      document.getElementById('shared-result').textContent =
+        `Anzahl geteilte Dienste: ${shared.length}\nIDs: ${shared.sort((a,b)=>a-b).join(', ')}`;
+
+      // Block 3: Reserve Dienste
+      // Bisherige + neue Reserve-Dienstnummern:
+      // 1, 90, 100, 190,
+      // 1101, 1102, 1201, 1202, 1301, 1302, 1401, 1402,
+      // 2101, 2102, 2201, 2202, 2301, 2302, 2401, 2402
+      const reserveIds = [
+        1, 100, 190, 90,          // ursprüngliche Reserve
+        1101, 1102, 1201, 1202,   // Mo–Fr Schule / Ferien Straßenbahn
+        1301, 1302, 1401, 1402,   // Sa / So Straßenbahn
+        2101, 2102, 2201, 2202,   // Mo–Fr Schule / Ferien Bus
+        2301, 2302, 2401, 2402    // Sa / So Bus
+      ];
+
+      const foundReserve = reserveIds.filter(id => ids.has(id));
+      document.getElementById('reserve-result').textContent =
+        `Anzahl Reserve-Dienste: ${foundReserve.length}\nIDs: ${foundReserve.sort((a,b)=>a-b).join(', ')}`;
+
+        // Block 4: Dienste >08:30h ohne Reserve
+        const longSet = new Set();
+        let lastL = null;
+        rows.slice(1).forEach(r => {
+          if (/^\d+$/.test(r[2])) lastL = parseInt(r[2], 10);
+          const raw = r[16];
+          if (lastL != null && typeof raw === 'string') {
+            const [h, m] = raw.split(':').map(Number);
+            if (h > 8 || (h === 8 && m > 30)) longSet.add(lastL);
+          }
+        });
+        document.getElementById('long-result').textContent =
+          `Dienste >08:30h: ${[...longSet].sort((a, b) => a - b).join(', ')}`;
+
+        // Block 5: unterschiedliche Orte
+        const eq = new Set(['BBU', 'BUP', 'BBN', 'NSL']);
+        const locSet = new Set();
+        let currentId5 = null, start5 = null;
+        rows.slice(1).concat([[]]).forEach((r, i, a) => {
+          if (/^\d+$/.test(r[2])) {
+            if (currentId5 != null && start5) {
+              const prev = a[i - 1] || [];
+              const end = prev[10] || '';
+              if (end && start5 !== end && !(eq.has(start5) && eq.has(end))) {
+                locSet.add(currentId5);
+              }
+            }
+            currentId5 = parseInt(r[2], 10);
+            start5 = r[6] || '';
+          } else if (!r.some(c => c != null && c !== '')) {
+            if (currentId5 != null && start5) {
+              const prev = a[i - 1] || [];
+              const end = prev[10] || '';
+              if (end && start5 !== end && !(eq.has(start5) && eq.has(end))) {
+                locSet.add(currentId5);
+              }
+            }
+            currentId5 = null;
+            start5 = null;
+          }
+        });
+        document.getElementById('loc-result').textContent =
+          `Unterschiedliche Orte: ${[...locSet].sort((a, b) => a - b).join(', ')}`;
+
+        // Block 6: Dienstteilstücke >04:30h
+        const segMap = new Map();
+        let cur6 = null;
+        rows.slice(1).forEach(r => {
+          if (/^\d+$/.test(r[2])) cur6 = parseInt(r[2], 10);
+          const st = r[5], en = r[9], cd = r[4] || '';
+          if (typeof st === 'string' && typeof en === 'string') {
+            const m1 = st.match(/^(\d{1,2}):(\d{2})$/);
+            const m2 = en.match(/^(\d{1,2}):(\d{2})$/);
+            if (m1 && m2) {
+              const t1 = +m1[1] * 60 + +m1[2];
+              const t2 = +m2[1] * 60 + +m2[2];
+              if (t2 - t1 > 270) {
+                if (!segMap.has(cur6)) segMap.set(cur6, new Set());
+                if (cd.trim()) segMap.get(cur6).add(cd.trim());
+              }
+            }
+          }
+        });
+        let segTxt = `Dienstteilstücke >04:30h: ${segMap.size}\n`;
+        [...segMap.entries()].sort((a, b) => a[0] - b[0]).forEach(([id, codes]) => {
+          segTxt += `ID ${id}: ${[...codes].join(', ')}\n`;
+        });
+        document.getElementById('segment-result').textContent = segTxt;
+
+        // Block 7: Schichtzuweisung
+        const shiftRules = [
+          { name: 'F1', start: 170, end: 270 },
+          { name: 'F2', start: 271, end: 371 },
+          { name: 'F3', start: 372, end: 614 },
+          { name: 'S1', start: 615, end: 779 },
+          { name: 'S2', start: 780, end: 1159 },
+          { name: 'N',  start: 1160, end: 1440 }
+        ];
+        const shiftCount = {};
+        const assignments = [];
+        let lastId7 = null;
+
+        rows.slice(1).forEach(r => {
+          if (/^[0-9]+$/.test(r[2])) lastId7 = parseInt(r[2], 10);
+          const tm = r[5];
+          if (lastId7 != null && typeof tm === 'string') {
+            const m = tm.match(/^(\d{1,2}):(\d{2})$/);
+            if (m) {
+              const mins = +m[1] * 60 + +m[2];
+              const rule = shiftRules.find(s => mins >= s.start && mins < s.end);
+              const nm = rule ? rule.name : 'Unbekannte';
+              if (!assignments.some(a => a.id === lastId7)) {
+                assignments.push({ id: lastId7, shift: nm });
+                shiftCount[nm] = (shiftCount[nm] || 0) + 1;
+              }
+            }
+          }
+        });
+        let shText = 'Schichtzählung:\n';
+        Object.entries(shiftCount).forEach(([n, c]) => {
+          shText += `${n}: ${c}\n`;
+        });
+        shText += '\nZuteilung:\n';
+        assignments
+          .sort((a, b) => a.id - b.id)
+          .forEach(a => {
+            shText += `ID ${a.id}: ${a.shift}\n`;
+          });
+        document.getElementById('shift-result').textContent = shText;
+
+        // Block 8: Dienste nach Linie/Kurs (mit nächster Zeile derselben ID)
+        const idOccurrences = new Map(); // id -> [{rowIndex, start, sLoc, course}, ...]
+        let currentIdOcc = null;
+
+        rows.slice(1).forEach((r, idx) => {
+          if (/^\d+$/.test(r[2])) currentIdOcc = parseInt(r[2], 10);
+
+          const start = r[5];
+          const sLoc = r[6] || '';
+          const courseRaw = r[4];
+          const hasValidTime =
+            typeof start === 'string' && /^[0-9]{1,2}:[0-9]{2}$/.test(start);
+          const course =
+            typeof courseRaw === 'string' &&
+            /^[0-9]{1,2}\/\d{1,2}$/.test(courseRaw.trim())
+              ? courseRaw.trim()
+              : '';
+
+          if (currentIdOcc != null && hasValidTime) {
+            if (!idOccurrences.has(currentIdOcc)) {
+              idOccurrences.set(currentIdOcc, []);
+            }
+            idOccurrences.get(currentIdOcc).push({
+              rowIndex: idx + 1,
+              start,
+              sLoc,
+              course
+            });
+          }
+        });
+
+        const routeMap2 = new Map();
+        let lastId8b = null;
+
+        rows.slice(1).forEach((r, idx) => {
+          if (/^[0-9]+$/.test(r[2])) lastId8b = parseInt(r[2], 10);
+          const keyRaw = r[4];
+
+          if (
+            typeof keyRaw === 'string' &&
+            /^[0-9]{1,2}\/\d{1,2}$/.test(keyRaw.trim())
+          ) {
+            const key = keyRaw.trim();
+            const start = r[5] || '';
+            const end = r[9] || '';
+            const sLoc = r[6] || '';
+            const eLoc = r[10] || '';
+
+            if (!routeMap2.has(key)) routeMap2.set(key, []);
+            routeMap2.get(key).push({
+              id: lastId8b,
+              start,
+              end,
+              sLoc,
+              eLoc,
+              rowIndex: idx + 1
+            });
+          }
+        });
+
+        const sortedKeys = [...routeMap2.keys()].sort((a, b) => {
+          const [l1, c1] = a.split('/').map(Number);
+          const [l2, c2] = b.split('/').map(Number);
+          return l1 - l2 || c1 - c2;
+        });
+
+        let rt = 'Dienste nach Linie/Kurs:\n';
+        sortedKeys.forEach(key => {
+          rt += `${key}:\n`;
+
+          const entries = routeMap2
+            .get(key)
+            .filter(
+              entry =>
+                typeof entry.start === 'string' &&
+                /^[0-9]{1,2}:[0-9]{2}$/.test(entry.start)
+            )
+            .sort((a, b) => {
+              const [h1, m1] = a.start.split(':').map(Number);
+              const [h2, m2] = b.start.split(':').map(Number);
+              return h1 * 60 + m1 - (h2 * 60 + m2);
+            });
+
+          entries.forEach(entry => {
+            let line =
+              `  ID ${entry.id} ${entry.start} ${entry.sLoc}` +
+              ` — ${entry.end} ${entry.eLoc}`;
+
+            const occList = idOccurrences.get(entry.id) || [];
+            const myPos = occList.findIndex(o => o.rowIndex === entry.rowIndex);
+
+            if (myPos !== -1 && myPos + 1 < occList.length) {
+              const next = occList[myPos + 1];
+              if (next.start && next.sLoc) {
+                const courseLabel = next.course ? ` ${next.course}` : '';
+                line += ` | ${next.start} ${next.sLoc}${courseLabel}`;
+              }
+            }
+
+            rt += line + '\n';
+          });
+
+          rt += '\n';
+        });
+
+        document.getElementById('route-result').textContent = rt.trim();
+
+        // Block 9: Pausen zwischen 30 und 120 Minuten (IDs 40–59 und 140–159 werden ignoriert)
+        const segmentsById = new Map();
+        let currentIdP = null;
+        let seqCounter = 0;
+
+        rows.slice(1).forEach(r => {
+          const idCell = r[2];
+
+          if (/^\d+$/.test(idCell)) {
+            currentIdP = parseInt(idCell, 10);
+          }
+
+          if (!r.some(c => c != null && c !== '')) {
+            currentIdP = null;
+            return;
+          }
+
+          if (currentIdP == null) return;
+
+          if (
+            (currentIdP >= 40 && currentIdP <= 59) ||
+            (currentIdP >= 140 && currentIdP <= 159)
+          ) {
+            return;
+          }
+
+          const startStr = r[5];
+          const endStr = r[9];
+
+          if (
+            typeof startStr !== 'string' ||
+            typeof endStr !== 'string' ||
+            !/^[0-9]{1,2}:[0-9]{2}$/.test(startStr) ||
+            !/^[0-9]{1,2}:[0-9]{2}$/.test(endStr)
+          ) {
+            return;
+          }
+
+          const [sh, sm] = startStr.split(':').map(Number);
+          const [eh, em] = endStr.split(':').map(Number);
+          const startMin = sh * 60 + sm;
+          const endMin = eh * 60 + em;
+
+          const startLoc = r[6] || '';
+          const endLoc = r[10] || '';
+          const courseRaw = r[4];
+          const course =
+            typeof courseRaw === 'string' && courseRaw.trim()
+              ? courseRaw.trim()
+              : '';
+
+          if (!segmentsById.has(currentIdP)) {
+            segmentsById.set(currentIdP, []);
+          }
+
+          segmentsById.get(currentIdP).push({
+            seq: seqCounter++,
+            startMin,
+            endMin,
+            startStr,
+            endStr,
+            startLoc,
+            endLoc,
+            course
+          });
+        });
+
+        const pauses = [];
+
+        for (const [id, segs] of segmentsById.entries()) {
+          segs.sort((a, b) => a.seq - b.seq);
+
+          for (let i = 0; i < segs.length - 1; i++) {
+            const from = segs[i];
+            const to = segs[i + 1];
+
+            const gap = to.startMin - from.endMin;
+
+            if (gap > 30 && gap < 120) {
+              pauses.push({ id, from, to, gap });
+            }
+          }
+        }
+
+        let pText = 'Pausen zwischen 30 und 120 Minuten:\n\n';
+
+        if (pauses.length === 0) {
+          pText += 'Keine Pausen im Bereich 30–120 Minuten gefunden.';
+        } else {
+          const uniqueIds = [...new Set(pauses.map(p => p.id))].sort(
+            (a, b) => a - b
+          );
+
+          const formatCourse = c => {
+            const cc = (c || '').trim();
+            return /^[0-9]{1,2}\/\d{1,2}$/.test(cc) ? ` (${cc})` : '';
+          };
+
+          uniqueIds.forEach(id => {
+            const list = pauses.filter(p => p.id === id);
+            pText += `ID ${id}:\n`;
+
+            list.forEach(p => {
+              const from = p.from;
+              const to = p.to;
+
+              const fromCourse = formatCourse(from.course);
+              const toCourse = formatCourse(to.course);
+
+              const fromLoc = from.endLoc || '';
+              const toLoc = to.startLoc || '';
+
+              pText +=
+                `  Pause: ${from.endStr} ${fromLoc}${fromCourse}` +
+                ` → ${to.startStr} ${toLoc}${toCourse}` +
+                ` | ${p.gap} min\n`;
+            });
+
+            pText += '\n';
+          });
+        }
+
+        document.getElementById('pause-result').textContent = pText.trim();
+      };
+
+      reader.readAsArrayBuffer(file);
+    });
+  </script>
+
+  <!-- KI-Chat Logik -->
+  <script>
+    (function() {
+      const CHAT_API_URL = 'https://dienstplan-ki-backend.onrender.com/chat';
+
+      const toggleBtn = document.getElementById('chat-toggle');
+      const chatWin   = document.getElementById('chat-window');
+      const closeBtn  = document.getElementById('chat-close');
+      const msgBox    = document.getElementById('chat-messages');
+      const input     = document.getElementById('chat-input');
+      const sendBtn   = document.getElementById('chat-send');
+
+      function appendMessage(text, who) {
+        const div = document.createElement('div');
+        div.className = 'chat-message ' + (who === 'user' ? 'user' : 'bot');
+        const span = document.createElement('span');
+        span.textContent = text;
+        div.appendChild(span);
+        msgBox.appendChild(div);
+        msgBox.scrollTop = msgBox.scrollHeight;
+      }
+
+      function toggleChat() {
+        const visible = chatWin.style.display === 'flex';
+        chatWin.style.display = visible ? 'none' : 'flex';
+        if (!visible) {
+          input.focus();
+        }
+      }
+
+      toggleBtn.addEventListener('click', toggleChat);
+      closeBtn.addEventListener('click', () => {
+        chatWin.style.display = 'none';
+      });
+
+      async function sendMessage() {
+        const text = input.value.trim();
+        if (!text) return;
+        appendMessage(text, 'user');
+        input.value = '';
+
+        try {
+          appendMessage('...denke nach...', 'bot');
+          const thinkingNode = msgBox.lastChild;
+
+          const response = await fetch(CHAT_API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ question: text })
+          });
+
+          msgBox.removeChild(thinkingNode);
+
+          if (!response.ok) {
+            appendMessage('Fehler bei der Anfrage an das KI-Backend.', 'bot');
+            return;
+          }
+
+          const data = await response.json();
+          const answer = data.answer || 'Keine Antwort vom Backend erhalten.';
+          appendMessage(answer, 'bot');
+        } catch (err) {
+          appendMessage('Es ist ein Verbindungsfehler zum KI-Backend aufgetreten.', 'bot');
+        }
+      }
+
+      sendBtn.addEventListener('click', sendMessage);
+      input.addEventListener('keydown', e => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          sendMessage();
+        }
+      });
+    })();
+  </script>
+
+  <!-- Suchlogik -->
+  <script>
+    (function() {
+      const searchInput = document.getElementById('search-input');
+      const clearBtn    = document.getElementById('search-clear');
+      const info        = document.getElementById('search-info');
+
+      if (!searchInput || !info) return;
+
+      const resultIds = [
+        'count-result',
+        'shared-result',
+        'reserve-result',
+        'long-result',
+        'loc-result',
+        'segment-result',
+        'shift-result',
+        'route-result',
+        'pause-result'
+      ];
+
+      function applySearch() {
+        const term = searchInput.value.trim().toLowerCase();
+        let hitCount = 0;
+
+        resultIds.forEach(id => {
+          const resEl = document.getElementById(id);
+          if (!resEl) return;
+          const blockEl = resEl.closest('.block') || resEl;
+
+          if (!term) {
+            blockEl.style.display = '';
+            return;
+          }
+
+          const text = resEl.textContent.toLowerCase();
+          if (text.includes(term)) {
+            blockEl.style.display = '';
+            hitCount++;
+          } else {
+            blockEl.style.display = 'none';
+          }
+        });
+
+        if (!term) {
+          info.textContent = 'Geben Sie einen Suchbegriff ein, um die Ergebnis-Blöcke zu filtern.';
+        } else if (hitCount === 0) {
+          info.textContent = `Keine Treffer für „${searchInput.value}“.`;
+        } else {
+          info.textContent = `${hitCount} Block/Blöcke enthalten „${searchInput.value}“.`;
+        }
+      }
+
+      searchInput.addEventListener('input', applySearch);
+
+      if (clearBtn) {
+        clearBtn.addEventListener('click', () => {
+          searchInput.value = '';
+          applySearch();
+        });
+      }
+    })();
+  </script>
+    <script>
+    (function () {
+      const askBtn     = document.getElementById('plan-ask');
+      const questionEl = document.getElementById('plan-question');
+      const resultEl   = document.getElementById('plan-answer');
+      if (!askBtn || !questionEl || !resultEl) return;
+
+      // Gleiche Backend-URL wie beim KI-Chat benutzen!
+      // Falls dein Service-Namen anders lautet, HIER anpassen:
+      const CHAT_API_URL = 'https://dienstplan-ki-backend.onrender.com/chat';
+
+      // Mapping: Ergebnis-Element -> "sprechender Block-Name" für die Überschrift
+      const BLOCK_LABELS = {
+        'count-result':   'Block 1 – Anzahl eindeutige Dienste',
+        'shared-result':  'Block 2 – Geteilte Dienste',
+        'reserve-result': 'Block 3 – Reserve Dienste',
+        'long-result':    'Block 4 – Dienste > 08:30h',
+        'loc-result':     'Block 5 – unterschiedliche Start- und End-Orte',
+        'segment-result': 'Block 6 – Dienstteilstücke > 04:30h und Linie/Kurs',
+        'shift-result':   'Block 7 – Schichtzuweisung anhand des Dienstbeginns',
+        'route-result':   'Block 8 – Dienste nach Linie/Kurs',
+        'pause-result':   'Block 9 – Pausen zwischen 30 und 120 Minuten'
+      };
+
+      const ANALYSIS_RESULT_IDS = Object.keys(BLOCK_LABELS);
+
+      // Auswertungstexte gesammelt nach Blöcken holen
+      function collectAnalysisTextByBlock() {
+        const blocks = [];
+        ANALYSIS_RESULT_IDS.forEach(id => {
+          const el = document.getElementById(id);
+          if (!el) return;
+          const text = (el.textContent || '').trim();
+          if (!text || /^Warte/.test(text) || text === '-') return;
+
+          const label = BLOCK_LABELS[id] || id;
+          blocks.push({
+            id,
+            label,
+            text
+          });
+        });
+        return blocks;
+      }
+
+      async function askPlanQuestion() {
+        const userQuestion = questionEl.value.trim();
+        if (!userQuestion) {
+          resultEl.textContent =
+            'Bitte geben Sie eine Frage ein (z. B. „Alles zu ID 122“).';
+          return;
+        }
+
+        const blocks = collectAnalysisTextByBlock();
+        if (!blocks.length) {
+          resultEl.textContent =
+            'Es liegen noch keine Auswertungen vor. Bitte zuerst eine Datei laden, damit die Blöcke 1–9 berechnet werden.';
+          return;
+        }
+
+        resultEl.textContent =
+          'KI wertet die Auswertungen aus und beantwortet Ihre Frage...';
+
+        // Kontext für die KI als Klartext aufbereiten
+        let contextText = '';
+        blocks.forEach(b => {
+          contextText += `${b.label}:\n${b.text}\n\n`;
+        });
+
+        // Prompt so formulieren, dass die Antwort immer nach Blöcken gegliedert ist
+        const prompt =
+          'Du bist eine spezialisierte KI, die Fragen zu einem ausgewerteten Dienstplan beantwortet.\n\n' +
+          'Unten findest du die Auswertungstexte aus mehreren Blöcken (Block 1–9). ' +
+          'Jeder Block hat bereits berechnete Informationen (IDs, Schichten, Linien/Kurse, Pausen etc.).\n\n' +
+          'AUFGABE:\n' +
+          '- Beantworte die Benutzerfrage ausschließlich auf Basis dieser Auswertungen (keine eigenen Daten annehmen).\n' +
+          '- Wenn nach einer konkreten Dienst-ID gefragt wird (z. B. „ID 122“), suche in ALLEN Blöcken nach dieser ID.\n' +
+          '- Strukturiere deine Antwort IMMER mit Überschriften je Block, in dem du Informationen findest.\n' +
+          '- Nutze genau diese Form der Überschriften:\n' +
+          '  * Block 1 – Anzahl eindeutige Dienste\n' +
+          '  * Block 2 – Geteilte Dienste\n' +
+          '  * Block 3 – Reserve Dienste\n' +
+          '  * Block 4 – Dienste > 08:30h\n' +
+          '  * Block 5 – unterschiedliche Start- und End-Orte\n' +
+          '  * Block 6 – Dienstteilstücke > 04:30h und Linie/Kurs\n' +
+          '  * Block 7 – Schichtzuweisung anhand des Dienstbeginns\n' +
+          '  * Block 8 – Dienste nach Linie/Kurs\n' +
+          '  * Block 9 – Pausen zwischen 30 und 120 Minuten\n' +
+          '- Gib NUR die Blöcke aus, in denen du relevante Informationen zur Frage findest.\n' +
+          '- Unter jeder Block-Überschrift liste die Infos in kurzen Stichpunkten auf.\n' +
+          '- Wenn du zu einer ID oder Frage wirklich GAR KEINE Information findest, schreibe dies ausdrücklich.\n\n' +
+          'AUSWERTUNGSTEXTE NACH BLÖCKEN:\n\n' +
+          contextText +
+          '\nFRAGE DES BENUTZERS:\n' +
+          userQuestion +
+          '\n\nANTWORTE NUN strukturiert wie beschrieben:';
+
+        try {
+          const response = await fetch(CHAT_API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ question: prompt })
+          });
+
+          if (!response.ok) {
+            resultEl.textContent =
+              'Fehler bei der Anfrage an das KI-Backend.';
+            return;
+          }
+
+          const data = await response.json();
+          const answer = data.answer || 'Keine Antwort vom KI-Backend erhalten.';
+          resultEl.textContent = answer;
+        } catch (err) {
+          resultEl.textContent =
+            'Es ist ein Verbindungsfehler zum KI-Backend aufgetreten.';
+        }
+      }
+
+      askBtn.addEventListener('click', askPlanQuestion);
+    })();
+  </script>
+</body>
+</html>
+
