@@ -1,1401 +1,1488 @@
 <!DOCTYPE html>
 <html lang="de">
+
 <head>
-  <meta charset="UTF-8">
-  <title>Dienstplan-Analyse (Schritt für Schritt)</title>
-  <!-- Google Font -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
-  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-  <style>
-    * { box-sizing: border-box; }
-    body {
-      font-family: 'Roboto', sans-serif;
-      margin: 0;
-      background: linear-gradient(135deg, #e3f2fd 0%, #e1f5fe 100%);
-      color: #212121;
-      padding: 2rem;
-    }
-    .container { max-width: 900px; margin: 0 auto; }
-    h1 { font-weight: 500; text-align: center; margin-bottom: 2rem; color: #01579b; }
-    .block {
-      background: #ffffff;
-      border-radius: 16px;
-      box-shadow: 0 6px 16px rgba(0,0,0,0.08);
-      padding: 1.75rem;
-      margin-bottom: 1.75rem;
-      transition: transform 0.3s, box-shadow 0.3s;
-    }
-    .block:hover {
-      transform: translateY(-6px);
-      box-shadow: 0 12px 24px rgba(0,0,0,0.12);
-    }
-    .block h2 { margin-top: 0; margin-bottom: 1rem; font-size: 1.25rem; font-weight: 500; color: #0277bd; }
-    .result {
-      background: #f5faff;
-      border-radius: 8px;
-      padding: 1.25rem;
-      font-size: 0.95rem;
-      line-height: 1.4;
-      color: #37474f;
-      white-space: pre-wrap;
-    }
-    input[type="file"] { margin-top: 0.5rem; font-size: 0.95rem; }
+	<meta charset="UTF-8">
+	<title>Dienstplan-Analyse (Schritt für Schritt)</title>
+	<!-- Google Font -->
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+	<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+	<style>
+		* {
+			box-sizing: border-box;
+		}
 
-    /* --- KI-Chat Widget --- */
-    .chat-toggle {
-      position: fixed;
-      bottom: 20px;
-      right: 20px;
-      width: 56px;
-      height: 56px;
-      border-radius: 50%;
-      border: none;
-      background: linear-gradient(135deg, #0288d1, #26c6da);
-      box-shadow: 0 6px 16px rgba(0,0,0,0.25);
-      color: #fff;
-      font-size: 24px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 1000;
-    }
-    .chat-toggle:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 10px 22px rgba(0,0,0,0.3);
-    }
+		body {
+			font-family: 'Roboto', sans-serif;
+			margin: 0;
+			background: linear-gradient(135deg, #e3f2fd 0%, #e1f5fe 100%);
+			color: #212121;
+			padding: 2rem;
+		}
 
-    .chat-window {
-      position: fixed;
-      bottom: 90px;
-      right: 20px;
-      width: 340px;
-      max-height: 460px;
-      display: none;
-      flex-direction: column;
-      background: #ffffff;
-      border-radius: 16px;
-      box-shadow: 0 10px 28px rgba(0,0,0,0.25);
-      z-index: 999;
-      overflow: hidden;
-    }
-    .chat-header {
-      padding: 0.75rem 1rem;
-      background: linear-gradient(135deg, #0277bd, #00acc1);
-      color: #fff;
-      font-weight: 500;
-      font-size: 0.95rem;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    .chat-header span {
-      font-size: 0.85rem;
-      opacity: 0.9;
-    }
-    .chat-close {
-      border: none;
-      background: transparent;
-      color: #fff;
-      font-size: 18px;
-      cursor: pointer;
-    }
-    .chat-messages {
-      padding: 0.75rem 1rem;
-      font-size: 0.9rem;
-      line-height: 1.4;
-      overflow-y: auto;
-      flex: 1;
-      background: #f5faff;
-    }
-    .chat-message {
-      margin-bottom: 0.5rem;
-    }
-    .chat-message.user {
-      text-align: right;
-    }
-    .chat-message.user span {
-      display: inline-block;
-      background: #bbdefb;
-      padding: 0.4rem 0.6rem;
-      border-radius: 12px 12px 0 12px;
-    }
-    .chat-message.bot span {
-      display: inline-block;
-      background: #e1f5fe;
-      padding: 0.4rem 0.6rem;
-      border-radius: 12px 12px 12px 0;
-    }
-    .chat-input-area {
-      border-top: 1px solid #e0e0e0;
-      padding: 0.5rem;
-      background: #fff;
-      display: flex;
-      gap: 0.5rem;
-      align-items: flex-end;
-    }
-    .chat-input-area textarea {
-      flex: 1;
-      resize: none;
-      border-radius: 8px;
-      border: 1px solid #b0bec5;
-      padding: 0.5rem;
-      font-family: inherit;
-      font-size: 0.9rem;
-      min-height: 40px;
-      max-height: 80px;
-    }
-    .chat-input-area button {
-      border: none;
-      border-radius: 999px;
-      padding: 0.4rem 0.9rem;
-      background: #0277bd;
-      color: #fff;
-      font-size: 0.9rem;
-      cursor: pointer;
-      white-space: nowrap;
-    }
-    .chat-input-area button:hover {
-      background: #01579b;
-    }
-  </style>
+		.container {
+			max-width: 900px;
+			margin: 0 auto;
+		}
+
+		h1 {
+			font-weight: 500;
+			text-align: center;
+			margin-bottom: 2rem;
+			color: #01579b;
+		}
+
+		.block {
+			background: #ffffff;
+			border-radius: 16px;
+			box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
+			padding: 1.75rem;
+			margin-bottom: 1.75rem;
+			transition: transform 0.3s, box-shadow 0.3s;
+		}
+
+		.block:hover {
+			transform: translateY(-6px);
+			box-shadow: 0 12px 24px rgba(0, 0, 0, 0.12);
+		}
+
+		.block h2 {
+			margin-top: 0;
+			margin-bottom: 1rem;
+			font-size: 1.25rem;
+			font-weight: 500;
+			color: #0277bd;
+		}
+
+		.result {
+			background: #f5faff;
+			border-radius: 8px;
+			padding: 1.25rem;
+			font-size: 0.95rem;
+			line-height: 1.4;
+			color: #37474f;
+			white-space: pre-wrap;
+		}
+
+		input[type="file"] {
+			margin-top: 0.5rem;
+			font-size: 0.95rem;
+		}
+
+		/* --- KI-Chat Widget --- */
+		.chat-toggle {
+			position: fixed;
+			bottom: 20px;
+			right: 20px;
+			width: 56px;
+			height: 56px;
+			border-radius: 50%;
+			border: none;
+			background: linear-gradient(135deg, #0288d1, #26c6da);
+			box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+			color: #fff;
+			font-size: 24px;
+			cursor: pointer;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			z-index: 1000;
+		}
+
+		.chat-toggle:hover {
+			transform: translateY(-2px);
+			box-shadow: 0 10px 22px rgba(0, 0, 0, 0.3);
+		}
+
+		.chat-window {
+			position: fixed;
+			bottom: 90px;
+			right: 20px;
+			width: 340px;
+			max-height: 460px;
+			display: none;
+			flex-direction: column;
+			background: #ffffff;
+			border-radius: 16px;
+			box-shadow: 0 10px 28px rgba(0, 0, 0, 0.25);
+			z-index: 999;
+			overflow: hidden;
+		}
+
+		.chat-header {
+			padding: 0.75rem 1rem;
+			background: linear-gradient(135deg, #0277bd, #00acc1);
+			color: #fff;
+			font-weight: 500;
+			font-size: 0.95rem;
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+		}
+
+		.chat-header span {
+			font-size: 0.85rem;
+			opacity: 0.9;
+		}
+
+		.chat-close {
+			border: none;
+			background: transparent;
+			color: #fff;
+			font-size: 18px;
+			cursor: pointer;
+		}
+
+		.chat-messages {
+			padding: 0.75rem 1rem;
+			font-size: 0.9rem;
+			line-height: 1.4;
+			overflow-y: auto;
+			flex: 1;
+			background: #f5faff;
+		}
+
+		.chat-message {
+			margin-bottom: 0.5rem;
+		}
+
+		.chat-message.user {
+			text-align: right;
+		}
+
+		.chat-message.user span {
+			display: inline-block;
+			background: #bbdefb;
+			padding: 0.4rem 0.6rem;
+			border-radius: 12px 12px 0 12px;
+		}
+
+		.chat-message.bot span {
+			display: inline-block;
+			background: #e1f5fe;
+			padding: 0.4rem 0.6rem;
+			border-radius: 12px 12px 12px 0;
+		}
+
+		.chat-input-area {
+			border-top: 1px solid #e0e0e0;
+			padding: 0.5rem;
+			background: #fff;
+			display: flex;
+			gap: 0.5rem;
+			align-items: flex-end;
+		}
+
+		.chat-input-area textarea {
+			flex: 1;
+			resize: none;
+			border-radius: 8px;
+			border: 1px solid #b0bec5;
+			padding: 0.5rem;
+			font-family: inherit;
+			font-size: 0.9rem;
+			min-height: 40px;
+			max-height: 80px;
+		}
+
+		.chat-input-area button {
+			border: none;
+			border-radius: 999px;
+			padding: 0.4rem 0.9rem;
+			background: #0277bd;
+			color: #fff;
+			font-size: 0.9rem;
+			cursor: pointer;
+			white-space: nowrap;
+		}
+
+		.chat-input-area button:hover {
+			background: #01579b;
+		}
+	</style>
 </head>
+
 <body>
-  <div class="container">
-    <h1>Dienstplan-Analyse (Schritt für Schritt)</h1>
-
-    <!-- Block 0 -->
-    <div class="block">
-      <h2>0. Datei auswählen</h2>
-      <input id="file-input" type="file" accept=".xlsx,.xls" />
-      <div id="file-result" class="result">Noch keine Datei ausgewählt.</div>
-    </div>
-
-    <!-- Such-Block -->
-    <div class="block">
-      <h2>Suche in den Auswertungen</h2>
-      <div style="display:flex; gap:0.5rem; margin-bottom:0.5rem; flex-wrap:wrap;">
-        <input
-          id="search-input"
-          type="text"
-          placeholder="z. B. ID 72, 5/11, BBU ..."
-          style="flex:1; min-width:180px; padding:0.4rem; border-radius:8px; border:1px solid #b0bec5;"
-        />
-        <button id="search-clear" style="border:none; border-radius:999px; padding:0.4rem 0.9rem; background:#0277bd; color:#fff; cursor:pointer;">
-          Zurücksetzen
-        </button>
-      </div>
-      <div id="search-info" class="result">
-        Geben Sie einen Suchbegriff ein, um die Ergebnis-Blöcke zu filtern.
-      </div>
-    </div>
-
-    <!-- Block 1 -->
-    <div class="block">
-      <h2>1. Anzahl eindeutige Dienste</h2>
-      <div id="count-result" class="result">Warte...</div>
-    </div>
-
-    <!-- Block 2 -->
-    <div class="block">
-      <h2>2. Anzahl geteilte Dienste</h2>
-      <div id="shared-result" class="result">Warte...</div>
-    </div>
-
-    <!-- Block 3 -->
-    <div class="block">
-      <h2>3. Reserve Dienste</h2>
-      <p>IDs: 1, 100, 190, 90, 1101, 1102, 1201, 1202, 2101, 2102, 2201, 2202</p>
-      <div id="reserve-result" class="result">Warte...</div>
-    </div>
-
-    <!-- Block 4 -->
-    <div class="block">
-      <h2>4. Dienste &gt; 08:30h</h2>
-      <div id="long-result" class="result">Warte...</div>
-    </div>
-
-    <!-- Block 5 -->
-    <div class="block">
-      <h2>5. Dienste mit unterschiedlichen Start- und End-Orten</h2>
-      <div id="loc-result" class="result">Warte...</div>
-    </div>
-
-    <!-- Block 6 -->
-    <div class="block">
-      <h2>6. Dienste mit Dienstteilstück &gt;04:30h und Linie/Kurs</h2>
-      <div id="segment-result" class="result">Warte...</div>
-    </div>
-
-    <!-- Block 7 -->
-    <div class="block">
-      <h2>7. Schichtzuweisung anhand des Dienstbeginns</h2>
-      <div id="shift-result" class="result">Warte...</div>
-    </div>
-
-    <!-- Block 8 -->
-    <div class="block">
-      <h2>8. Dienste nach Linie/Kurs</h2>
-      <div id="route-result" class="result">Warte...</div>
-    </div>
-
-    <!-- Block 9 -->
-    <div class="block">
-      <h2>9. Pausen zwischen 30 und 120 Minuten</h2>
-      <div id="pause-result" class="result">Warte...</div>
-    </div>
-  </div>
-   
-  <!-- Block 10 -->
-    <div class="block">
-      <h2>10. KI-Fragen zum ausgewerteten Dienstplan</h2>
-      <p>Stellen Sie hier Fragen zur Auswertung, z.&nbsp;B.: „Alles zu ID 122“ oder „Wo taucht Dienst 45 überall auf?“.</p>
-      <textarea
-        id="plan-question"
-        rows="3"
-        placeholder="z. B. Alles zu ID 122, oder: Welche Schicht hat Dienst 87?"
-        style="width:100%; padding:0.5rem; border-radius:8px; border:1px solid #b0bec5; font-family:inherit; font-size:0.95rem; margin-bottom:0.5rem;"
-      ></textarea>
-      <button
-        id="plan-ask"
-        style="border:none; border-radius:999px; padding:0.5rem 1.1rem; background:#0277bd; color:#fff; cursor:pointer; margin-bottom:0.7rem;"
-      >
-        Frage an KI stellen
-      </button>
-      <div id="plan-answer" class="result">
-        Noch keine KI-Anfrage gestellt.
-      </div>
-    </div>
-  
-  <!-- KI-Chat Widget -->
-  <button class="chat-toggle" id="chat-toggle" title="Fragen zur Auswertung stellen">
-    💬
-  </button>
-  <div class="chat-window" id="chat-window">
-    <div class="chat-header">
-      <div>
-        KI-Hilfe
-        <br><span>Fragen zur Dienstplan-Analyse</span>
-      </div>
-      <button class="chat-close" id="chat-close" aria-label="Chat schließen">×</button>
-    </div>
-    <div class="chat-messages" id="chat-messages">
-      <div class="chat-message bot">
-        <span>Hallo! Stellen Sie mir eine Frage zu den Auswertungen, z.&nbsp;B. „Was bedeutet Block 4?“.</span>
-      </div>
-    </div>
-    <div class="chat-input-area">
-      <textarea id="chat-input" rows="1" placeholder="Frage eingeben..."></textarea>
-      <button id="chat-send">Senden</button>
-    </div>
-  </div>
-
-  <!-- Analyse-Skript Blöcke 1–9 -->
-  <script>
-    document.getElementById('file-input').addEventListener('change', function() {
-      const file = this.files[0];
-      const blocks = [
-        'count-result',
-        'shared-result',
-        'reserve-result',
-        'long-result',
-        'loc-result',
-        'segment-result',
-        'shift-result',
-        'route-result',
-        'pause-result'
-      ];
-      document.getElementById('file-result').textContent =
-        file ? `Datei: ${file.name}` : 'Keine Datei ausgewählt.';
-      blocks.forEach(id =>
-        document.getElementById(id).textContent = file ? 'Warte auf Auswertung...' : '-'
-      );
-      if (!file) return;
-
-      const reader = new FileReader();
-      reader.onload = function(e) {
-        const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
-        const rows = XLSX.utils.sheet_to_json(
-          wb.Sheets[wb.SheetNames[0]],
-          { header: 1 }
-        );
-
-            // Block 1: eindeutige IDs
-      // Alle positiven numerischen Dienstnummern berücksichtigen (inkl. 1101ff, 2101ff usw.)
-      const ids = new Set();
-      for (let i = 1; i < rows.length; i++) {
-        const num = parseInt(rows[i][2], 10);  // Spalte C
-        if (!isNaN(num) && num >= 1) {
-          ids.add(num);
-        }
-      }
-      document.getElementById('count-result').textContent =
-        `Anzahl eindeutiger Dienst-IDs: ${ids.size}`;
-
-// Block 2: geteilte Dienste mit Schichtdauer-Prüfung (O/P, max. 12:00h)
-
-// Bereiche für geteilte Dienste:
-// 40–59, 140–159, 1140–1159, 1240–1259, 2140–2159, 2240–2259
-function isSharedService(id) {
-  return (
-    (id >= 40   && id <= 59)   ||  // ursprüngliche geteilte Dienste
-    (id >= 140  && id <= 159)  ||  // ursprüngliche geteilte Dienste
-    (id >= 1140 && id <= 1159) ||  // Mo–Fr Schule Straßenbahn geteilt
-    (id >= 1240 && id <= 1259) ||  // Mo–Fr Ferien Straßenbahn geteilt
-    (id >= 2140 && id <= 2159) ||  // Mo–Fr Schule Bus geteilt
-    (id >= 2240 && id <= 2259)     // Mo–Fr Ferien Bus geteilt
-  );
-}
-
-// HH:MM -> Minuten
-function parseTimeToMinutes(str) {
-  if (typeof str !== 'string') return null;
-  const m = str.match(/^(\d{1,2}):(\d{2})$/);
-  if (!m) return null;
-  const h = parseInt(m[1], 10);
-  const mi = parseInt(m[2], 10);
-  if (isNaN(h) || isNaN(mi)) return null;
-  return h * 60 + mi;
-}
-
-const sharedIds = [...ids].filter(id => isSharedService(id));
-const sharedIdsSorted = sharedIds.slice().sort((a, b) => a - b);
-const sharedSet = new Set(sharedIdsSorted);
-
-// Für jede geteilte ID: erste Zeit aus Spalte O (Index 14) und
-// letzte Zeit aus Spalte P (Index 15) bestimmen
-const sharedInfo = new Map(); // id -> { minStart, maxEnd }
-let currentIdShared = null;
-
-for (let i = 1; i < rows.length; i++) {
-  const row = rows[i];
-
-  const idCell = row[2];
-  if (/^\d+$/.test(idCell)) {
-    currentIdShared = parseInt(idCell, 10);
-  }
-
-  if (!sharedSet.has(currentIdShared)) continue;
-
-  const startStr = row[14]; // Spalte O
-  const endStr   = row[15]; // Spalte P
-
-  const startMin = parseTimeToMinutes(startStr);
-  const endMin   = parseTimeToMinutes(endStr);
-
-  if (!sharedInfo.has(currentIdShared)) {
-    sharedInfo.set(currentIdShared, { minStart: null, maxEnd: null });
-  }
-  const info = sharedInfo.get(currentIdShared);
-
-  if (startMin !== null) {
-    if (info.minStart === null || startMin < info.minStart) {
-      info.minStart = startMin;
-    }
-  }
-
-  if (endMin !== null) {
-    if (info.maxEnd === null || endMin > info.maxEnd) {
-      info.maxEnd = endMin;
-    }
-  }
-}
-
-// Auswertung: Schichtdauer und Prüfung > 12:00h
-const over12 = [];
-const lines = [];
-
-sharedIdsSorted.forEach(id => {
-  const info = sharedInfo.get(id);
-  if (!info || info.minStart === null || info.maxEnd === null) {
-    lines.push(`ID ${id}: keine gültigen Zeiten in Spalte O/P gefunden`);
-    return;
-  }
-
-  let diff = info.maxEnd - info.minStart;
-
-  // über Mitternacht
-  if (diff < 0) diff += 24 * 60;
-
-  const h = Math.floor(diff / 60);
-  const m = diff % 60;
-  const durStr = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-
-  lines.push(`ID ${id}: Schichtdauer ${durStr} (Spalte O → P)`);
-
-  if (diff > 12 * 60) {
-    over12.push(`ID ${id} (${durStr})`);
-  }
-});
-
-let sharedText =
-  `Anzahl geteilte Dienste: ${sharedIdsSorted.length}\n` +
-  `IDs: ${sharedIdsSorted.join(', ')}`;
-
-if (sharedIdsSorted.length > 0) {
-  sharedText +=
-    `\n\nSchichtdauer je geteilter Dienst (erste Zeit in Spalte O bis letzte Zeit in Spalte P):\n` +
-    lines.join('\n');
-}
-
-if (sharedIdsSorted.length === 0) {
-  sharedText += `\n\nKeine geteilten Dienste gefunden.`;
-} else if (over12.length === 0) {
-  sharedText += `\n\nAlle geteilten Dienste liegen bei maximal 12:00h Schichtdauer.`;
-} else {
-  sharedText +=
-    `\n\nAchtung: folgende geteilte Dienste überschreiten 12:00h Schichtdauer:\n` +
-    over12.join(', ');
-}
-
-document.getElementById('shared-result').textContent = sharedText;
-
-      // Block 3: Reserve Dienste
-      // Bisherige + neue Reserve-Dienstnummern:
-      // 1, 90, 100, 190,
-      // 1101, 1102, 1201, 1202, 1301, 1302, 1401, 1402,
-      // 2101, 2102, 2201, 2202, 2301, 2302, 2401, 2402
-      const reserveIds = [
-        1, 100, 190, 90,          // ursprüngliche Reserve
-        1101, 1102, 1201, 1202,   // Mo–Fr Schule / Ferien Straßenbahn
-        1301, 1302, 1401, 1402,   // Sa / So Straßenbahn
-        2101, 2102, 2201, 2202,   // Mo–Fr Schule / Ferien Bus
-        2301, 2302, 2401, 2402    // Sa / So Bus
-      ];
-
-      const foundReserve = reserveIds.filter(id => ids.has(id));
-      document.getElementById('reserve-result').textContent =
-        `Anzahl Reserve-Dienste: ${foundReserve.length}\nIDs: ${foundReserve.sort((a,b)=>a-b).join(', ')}`;
-
-        // Block 4: Dienste >08:30h ohne Reserve
-        const longSet = new Set();
-        let lastL = null;
-        rows.slice(1).forEach(r => {
-          if (/^\d+$/.test(r[2])) lastL = parseInt(r[2], 10);
-          const raw = r[16];
-          if (lastL != null && typeof raw === 'string') {
-            const [h, m] = raw.split(':').map(Number);
-            if (h > 8 || (h === 8 && m > 30)) longSet.add(lastL);
-          }
-        });
-        document.getElementById('long-result').textContent =
-          `Dienste >08:30h: ${[...longSet].sort((a, b) => a - b).join(', ')}`;
-
-        // Block 5: unterschiedliche Orte
-        const eq = new Set(['BBU', 'BUP', 'BBN', 'NSL']);
-        const locSet = new Set();
-        let currentId5 = null, start5 = null;
-        rows.slice(1).concat([[]]).forEach((r, i, a) => {
-          if (/^\d+$/.test(r[2])) {
-            if (currentId5 != null && start5) {
-              const prev = a[i - 1] || [];
-              const end = prev[10] || '';
-              if (end && start5 !== end && !(eq.has(start5) && eq.has(end))) {
-                locSet.add(currentId5);
-              }
-            }
-            currentId5 = parseInt(r[2], 10);
-            start5 = r[6] || '';
-          } else if (!r.some(c => c != null && c !== '')) {
-            if (currentId5 != null && start5) {
-              const prev = a[i - 1] || [];
-              const end = prev[10] || '';
-              if (end && start5 !== end && !(eq.has(start5) && eq.has(end))) {
-                locSet.add(currentId5);
-              }
-            }
-            currentId5 = null;
-            start5 = null;
-          }
-        });
-        document.getElementById('loc-result').textContent =
-          `Unterschiedliche Orte: ${[...locSet].sort((a, b) => a - b).join(', ')}`;
-
-        // Block 6: Dienstteilstücke >04:30h und Hinweis bei >06:00h
-        // - Reserve-Dienste werden nicht berücksichtigt
-        // - Nachtdienste über 0:00 Uhr werden korrekt bewertet
-        // - Dienstteile mit Pause <30 min zwischen zwei Stücken werden kombiniert geprüft
-
-        const reserveIdSet = new Set(reserveIds || []);
-
-        function diffMinutes(startMin, endMin) {
-          // Differenz in Minuten, korrekt über Mitternacht
-          let diff = endMin - startMin;
-          if (diff < 0) diff += 24 * 60;
-          return diff;
-        }
-
-        function formatDuration(totalMin) {
-          const h = Math.floor(totalMin / 60);
-          const m = totalMin % 60;
-          return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-        }
-
-        function formatCourseLabel(c) {
-          const cc = (c || '').trim();
-          // Linie/Kurs in Form 5/11 usw.
-          if (/^[0-9]{1,2}\/\d{1,2}$/.test(cc)) return ` (${cc})`;
-          return cc ? ` (${cc})` : '';
-        }
-
-        // Alle Dienstteilstücke je ID sammeln (ohne Reserve-Dienste)
-        const segmentsById6 = new Map();
-        let currentId6 = null;
-
-        rows.slice(1).forEach(r => {
-          const idCell = r[2];
-
-          if (/^\d+$/.test(idCell)) {
-            currentId6 = parseInt(idCell, 10);
-          }
-
-          // komplett leere Zeile beendet den Dienst
-          if (!r.some(c => c != null && c !== '')) {
-            currentId6 = null;
-            return;
-          }
-
-          if (currentId6 == null) return;
-
-          // Reserve-Dienste für diese Auswertung ignorieren
-          if (reserveIdSet.has(currentId6)) return;
-
-          const startStr = r[5];
-          const endStr   = r[9];
-
-          if (
-            typeof startStr !== 'string' ||
-            typeof endStr !== 'string' ||
-            !/^[0-9]{1,2}:[0-9]{2}$/.test(startStr) ||
-            !/^[0-9]{1,2}:[0-9]{2}$/.test(endStr)
-          ) {
-            return;
-          }
-
-          const [sh, sm] = startStr.split(':').map(Number);
-          const [eh, em] = endStr.split(':').map(Number);
-          const startMin = sh * 60 + sm;
-          const endMin   = eh * 60 + em;
-
-          const courseRaw = r[4];
-          const course =
-            typeof courseRaw === 'string' && courseRaw.trim()
-              ? courseRaw.trim()
-              : '';
-
-          if (!segmentsById6.has(currentId6)) {
-            segmentsById6.set(currentId6, []);
-          }
-
-          // Reihenfolge der Zeilen beibehalten (Excel ist chronologisch)
-          segmentsById6.get(currentId6).push({
-            startMin,
-            endMin,
-            startStr,
-            endStr,
-            course
-          });
-        });
-
-        // Auswertung: >4:30h und >6:00h (inkl. kombinierter Dienstteile)
-        const over45ById = new Map(); // id -> Array Textzeilen zu diesem Dienst
-        const idsOver6   = new Set(); // Dienste mit mind. einem Segment >6h
-
-        segmentsById6.forEach((segs, id) => {
-          if (!segs.length) return;
-
-          const lines = [];
-
-          // 1) Einzelsegmente prüfen
-          for (let i = 0; i < segs.length; i++) {
-            const s = segs[i];
-            const dur = diffMinutes(s.startMin, s.endMin); // korrekt über Mitternacht
-            if (dur > 270) { // >4:30h
-              const durStr      = formatDuration(dur);
-              const courseLabel = formatCourseLabel(s.course);
-              lines.push(
-                `  Einzelsegment ${s.startStr}–${s.endStr}${courseLabel} | Dauer ${durStr}`
-              );
-              if (dur > 360) { // >6:00h
-                idsOver6.add(id);
-              }
-            }
-          }
-
-          // 2) Kombinierte Dienstteile: Pause <30 Minuten zwischen zwei Stücken
-          // (gilt auch für Dienste mit 3 oder mehr Dienstteilen)
-          for (let i = 0; i < segs.length - 1; i++) {
-            const a = segs[i];
-            const b = segs[i + 1];
-
-            const gap = diffMinutes(a.endMin, b.startMin); // Pause zwischen Ende a und Beginn b
-            if (gap < 30) {
-              const durComb = diffMinutes(a.startMin, b.endMin);
-              if (durComb > 270) { // >4:30h kombiniert
-                const durStr = formatDuration(durComb);
-
-                const courses = [a.course, b.course]
-                  .filter(c => c && c.trim())
-                  .map(c => c.trim());
-                const courseInfo = courses.length
-                  ? ` (${courses.join(' / ')})`
-                  : '';
-
-                lines.push(
-                  `  Kombiniert: ${a.startStr}–${a.endStr} und ${b.startStr}–${b.endStr}${courseInfo}` +
-                  ` | Pause ${gap} Min, Gesamtdauer ${durStr}`
-                );
-
-                if (durComb > 360) { // >6:00h kombiniert
-                  idsOver6.add(id);
-                }
-              }
-            }
-          }
-
-          if (lines.length) {
-            over45ById.set(id, lines);
-          }
-        });
-
-        let segTxt =
-          `Dienstteilstücke >04:30h (ohne Reserve-Dienste, inkl. kombinierter Teile mit Pause <30 Min): ` +
-          `${over45ById.size}\n`;
-
-        if (over45ById.size === 0) {
-          segTxt += '\nKeine relevanten Dienstteilstücke gefunden.';
-        } else {
-          segTxt += '\n';
-
-          [...over45ById.entries()]
-            .sort((a, b) => a[0] - b[0])
-            .forEach(([id, lines]) => {
-              segTxt += `ID ${id}:\n`;
-              lines.forEach(line => {
-                segTxt += line + '\n';
-              });
-
-              if (idsOver6.has(id)) {
-                segTxt +=
-                  '  Hinweis: Bitte Fahrtafel prüfen ob 1/6 Dienst und Standzeiten ausreichen.\n';
-              }
-
-              segTxt += '\n';
-            });
-        }
-
-        document.getElementById('segment-result').textContent = segTxt.trim();
-
-
-         // Block 7: Schichtzuweisung inkl. separater Ausweisung geteilter Dienste (GF1, GF2, ...)
-        const shiftRules = [
-          { name: 'F1', start: 170, end: 270 },
-          { name: 'F2', start: 271, end: 371 },
-          { name: 'F3', start: 372, end: 614 },
-          { name: 'S1', start: 615, end: 779 },
-          { name: 'S2', start: 780, end: 1159 },
-          { name: 'N',  start: 1160, end: 1440 }
-        ];
-
-        const shiftCount = {};          // alle Dienste nach F1, F2, ...
-        const sharedShiftCount = {};    // nur geteilte Dienste, z.B. GF1, GF2, ...
-        const assignments = [];         // je Dienst: zugewiesene Schicht
-        let lastId7 = null;
-
-        // Set der geteilten Dienste (aus Block 2)
-        const sharedIdSet = new Set([...ids].filter(id => isSharedService(id)));
-
-        rows.slice(1).forEach(r => {
-          if (/^[0-9]+$/.test(r[2])) {
-            lastId7 = parseInt(r[2], 10);
-          }
-
-          const tm = r[5]; // Spalte F: Dienstbeginn
-          if (lastId7 != null && typeof tm === 'string') {
-            const m = tm.match(/^(\d{1,2}):(\d{2})$/);
-            if (m) {
-              const mins = parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
-              const rule = shiftRules.find(s => mins >= s.start && mins < s.end);
-              const baseName = rule ? rule.name : 'Unbekannte';
-
-              // Pro Dienst-ID nur einmal zuweisen (erster gefundener Dienstbeginn)
-              if (!assignments.some(a => a.id === lastId7)) {
-                const isShared = sharedIdSet.has(lastId7);
-                let finalName = baseName;
-
-                // geteilte Dienste bekommen eigene Schichtlage GF1, GF2, ...
-                if (isShared && baseName !== 'Unbekannte') {
-                  finalName = 'G' + baseName;
-                }
-
-                assignments.push({ id: lastId7, shift: finalName, isShared });
-
-                // Gesamtzählung nach Grund-Schichtlage (F1, F2, ...)
-                shiftCount[baseName] = (shiftCount[baseName] || 0) + 1;
-
-                // separate Zählung geteilte Dienste nach GF1, GF2, ...
-                if (isShared && baseName !== 'Unbekannte') {
-                  sharedShiftCount[finalName] = (sharedShiftCount[finalName] || 0) + 1;
-                }
-              }
-            }
-          }
-        });
-
-        let shText = 'Schichtzählung (alle Dienste nach F1, F2, F3, S1, S2, N):\n';
-        Object.entries(shiftCount)
-          .sort((a, b) => a[0].localeCompare(b[0], 'de'))
-          .forEach(([name, count]) => {
-            shText += `${name}: ${count}\n`;
-          });
-
-        shText += '\nGeteilte Dienste mit separater Schichtlage (GF1, GF2, ...):\n';
-        const sharedKeys = Object.keys(sharedShiftCount);
-        if (sharedKeys.length === 0) {
-          shText += 'Keine geteilten Dienste mit zugewiesener Schichtlage gefunden.\n';
-        } else {
-          sharedKeys
-            .sort((a, b) => a.localeCompare(b, 'de'))
-            .forEach(name => {
-              shText += `${name}: ${sharedShiftCount[name]}\n`;
-            });
-        }
-
-        shText += '\nZuteilung je Dienst-ID:\n';
-        assignments
-          .sort((a, b) => a.id - b.id)
-          .forEach(a => {
-            shText += `ID ${a.id}: ${a.shift}${a.isShared ? ' (geteilt)' : ''}\n`;
-          });
-
-        document.getElementById('shift-result').textContent = shText.trim();
-
-
-        // Block 8: Dienste nach Linie/Kurs (mit nächster Zeile derselben ID)
-        const idOccurrences = new Map(); // id -> [{rowIndex, start, sLoc, course}, ...]
-        let currentIdOcc = null;
-
-        rows.slice(1).forEach((r, idx) => {
-          if (/^\d+$/.test(r[2])) currentIdOcc = parseInt(r[2], 10);
-
-          const start = r[5];
-          const sLoc = r[6] || '';
-          const courseRaw = r[4];
-          const hasValidTime =
-            typeof start === 'string' && /^[0-9]{1,2}:[0-9]{2}$/.test(start);
-          const course =
-            typeof courseRaw === 'string' &&
-            /^[0-9]{1,2}\/\d{1,2}$/.test(courseRaw.trim())
-              ? courseRaw.trim()
-              : '';
-
-          if (currentIdOcc != null && hasValidTime) {
-            if (!idOccurrences.has(currentIdOcc)) {
-              idOccurrences.set(currentIdOcc, []);
-            }
-            idOccurrences.get(currentIdOcc).push({
-              rowIndex: idx + 1,
-              start,
-              sLoc,
-              course
-            });
-          }
-        });
-
-        const routeMap2 = new Map();
-        let lastId8b = null;
-
-        rows.slice(1).forEach((r, idx) => {
-          if (/^[0-9]+$/.test(r[2])) lastId8b = parseInt(r[2], 10);
-          const keyRaw = r[4];
-
-          if (
-            typeof keyRaw === 'string' &&
-            /^[0-9]{1,2}\/\d{1,2}$/.test(keyRaw.trim())
-          ) {
-            const key = keyRaw.trim();
-            const start = r[5] || '';
-            const end = r[9] || '';
-            const sLoc = r[6] || '';
-            const eLoc = r[10] || '';
-
-            if (!routeMap2.has(key)) routeMap2.set(key, []);
-            routeMap2.get(key).push({
-              id: lastId8b,
-              start,
-              end,
-              sLoc,
-              eLoc,
-              rowIndex: idx + 1
-            });
-          }
-        });
-
-        const sortedKeys = [...routeMap2.keys()].sort((a, b) => {
-          const [l1, c1] = a.split('/').map(Number);
-          const [l2, c2] = b.split('/').map(Number);
-          return l1 - l2 || c1 - c2;
-        });
-
-        let rt = 'Dienste nach Linie/Kurs:\n';
-        sortedKeys.forEach(key => {
-          rt += `${key}:\n`;
-
-          const entries = routeMap2
-            .get(key)
-            .filter(
-              entry =>
-                typeof entry.start === 'string' &&
-                /^[0-9]{1,2}:[0-9]{2}$/.test(entry.start)
-            )
-            .sort((a, b) => {
-              const [h1, m1] = a.start.split(':').map(Number);
-              const [h2, m2] = b.start.split(':').map(Number);
-              return h1 * 60 + m1 - (h2 * 60 + m2);
-            });
-
-          entries.forEach(entry => {
-            let line =
-              `  ID ${entry.id} ${entry.start} ${entry.sLoc}` +
-              ` — ${entry.end} ${entry.eLoc}`;
-
-            const occList = idOccurrences.get(entry.id) || [];
-            const myPos = occList.findIndex(o => o.rowIndex === entry.rowIndex);
-
-            if (myPos !== -1 && myPos + 1 < occList.length) {
-              const next = occList[myPos + 1];
-              if (next.start && next.sLoc) {
-                const courseLabel = next.course ? ` ${next.course}` : '';
-                line += ` | ${next.start} ${next.sLoc}${courseLabel}`;
-              }
-            }
-
-            rt += line + '\n';
-          });
-
-          rt += '\n';
-        });
-
-        document.getElementById('route-result').textContent = rt.trim();
-
-         // Block 9: Pausen zwischen 30 und 120 Minuten
-        // Regeln:
-        // - Es werden Pausen zwischen 30 und 120 Minuten gesucht (Ende J -> Beginn F)
-        // - Geteilte Dienste 40–59 und 140–159 werden ignoriert
-        // - Pausenort HLZ/TGR/LGR: mindestens 39 Minuten, sonst mindestens 33 Minuten
-        // - BV-Regel: Mindestens eine Pause, deren vorhergehende Arbeitszeit (Spalte O -> J)
-        //   zwischen 3,5 h und 4,5 h liegt.
-        //   Bei Diensten mit 3 Dienstteilen und 2 Pausen wird für die zweite Pause
-        //   die Arbeitszeit von O des 1. Dienstteils bis J des 2. Dienstteils berechnet.
-
-        function parseTimeToMin9(str) {
-          if (typeof str !== 'string') return null;
-          const m = str.match(/^(\d{1,2}):(\d{2})$/);
-          if (!m) return null;
-          const h = parseInt(m[1], 10);
-          const mi = parseInt(m[2], 10);
-          if (isNaN(h) || isNaN(mi)) return null;
-          return h * 60 + mi;
-        }
-
-        function diffMinutesOverMidnight9(startMin, endMin) {
-          if (startMin == null || endMin == null) return null;
-          let diff = endMin - startMin;
-          if (diff < 0) diff += 24 * 60;
-          return diff;
-        }
-
-        function formatMinutesToHHMM9(totalMin) {
-          if (totalMin == null) return '';
-          const h = Math.floor(totalMin / 60);
-          const m = totalMin % 60;
-          return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-        }
-
-        function formatCourse9(courseStr) {
-          const c = (courseStr || '').trim();
-          if (!c) return '';
-          return ` (${c})`;
-        }
-
-        function isIgnoredSplitService9(id) {
-          return (id >= 40 && id <= 59) || (id >= 140 && id <= 159);
-        }
-
-        const SPECIAL_LOCATIONS9 = ['HLZ', 'TGR', 'LGR'];
-        const MIN_BV_9 = 3.5 * 60; // 210
-        const MAX_BV_9 = 4.5 * 60; // 270
-
-        // Dienstteilstücke je Dienst-ID einsammeln (ohne geteilte Dienste 40–59, 140–159)
-        const segmentsById9 = new Map();
-        let currentId9 = null;
-        let seqCounter9 = 0;
-
-        rows.slice(1).forEach((r, idx) => {
-          const idCell = r[2];
-
-          if (/^\d+$/.test(idCell)) {
-            currentId9 = parseInt(idCell, 10);
-          }
-
-          // komplett leere Zeile beendet die Dienstverfolgung
-          if (!r.some(c => c != null && c !== '')) {
-            currentId9 = null;
-            return;
-          }
-
-          if (currentId9 == null) return;
-
-          const id = currentId9;
-
-          // geteilte Dienste 40–59 und 140–159 ignorieren
-          if (isIgnoredSplitService9(id)) return;
-
-          const startStr = r[5];   // Spalte F
-          const endStr   = r[9];   // Spalte J
-          const startMin = parseTimeToMin9(startStr);
-          const endMin   = parseTimeToMin9(endStr);
-          if (startMin == null || endMin == null) return;
-
-          const startLoc = r[6]  || ''; // Spalte G
-          const endLoc   = r[10] || ''; // Spalte K
-          const course   = (r[4] || '').trim(); // Spalte E
-
-          if (!segmentsById9.has(id)) {
-            segmentsById9.set(id, []);
-          }
-
-          segmentsById9.get(id).push({
-            seq: ++seqCounter9,
-            startMin,
-            endMin,
-            startStr,
-            endStr,
-            startLoc,
-            endLoc,
-            course,
-            rowIndex: idx + 1 // Index in rows[]
-          });
-        });
-
-        // Pausen zwischen Dienstteilstücken ermitteln (30–120 Minuten)
-        const pauses9 = [];
-
-        for (const [id, segs] of segmentsById9.entries()) {
-          segs.sort((a, b) => a.seq - b.seq);
-
-          for (let i = 0; i < segs.length - 1; i++) {
-            const from = segs[i];
-            const to   = segs[i + 1];
-
-            const gap = diffMinutesOverMidnight9(from.endMin, to.startMin);
-            if (gap == null) continue;
-
-            // Nur 30–120 Minuten berücksichtigen
-            if (gap >= 30 && gap <= 120) {
-              // Arbeitszeit vor der Pause:
-              // Standard: Spalte O -> J des Dienstteils "from"
-              // Sonderfall: genau 3 Dienstteile und dies ist die zweite Pause (i === 1),
-              // dann von O des ersten Dienstteils bis J des zweiten Dienstteils.
-              let workDurMin = null;
-              let workDurStr = '';
-              let workInRange = false;
-              let workUnknown = false;
-
-              let workStartRowIndex = from.rowIndex;
-              let workEndRowIndex   = from.rowIndex;
-
-              if (segs.length === 3 && i === 1) {
-                // zweite Pause bei 3 Dienstteilen: 1. Teil (Index 0) -> 2. Teil (Index 1)
-                workStartRowIndex = segs[0].rowIndex;
-                workEndRowIndex   = segs[1].rowIndex;
-              }
-
-              const rowStart = rows[workStartRowIndex] || null;
-              const rowEnd   = rows[workEndRowIndex] || null;
-
-              if (rowStart && rowEnd) {
-                const workStartStr = rowStart[14]; // Spalte O
-                const workEndStr   = rowEnd[9];    // Spalte J
-
-                const workStartMin = parseTimeToMin9(workStartStr);
-                const workEndMin   = parseTimeToMin9(workEndStr);
-                const wDur         = diffMinutesOverMidnight9(workStartMin, workEndMin);
-
-                if (wDur != null) {
-                  workDurMin = wDur;
-                  workDurStr = formatMinutesToHHMM9(wDur);
-                  workInRange = wDur >= MIN_BV_9 && wDur <= MAX_BV_9;
-                } else {
-                  workUnknown = true;
-                }
-              } else {
-                workUnknown = true;
-              }
-
-              pauses9.push({
-                id,
-                from,
-                to,
-                gap,
-                workDurMin,
-                workDurStr,
-                workInRange,
-                workUnknown
-              });
-            }
-          }
-        }
-
-        let pText = 'Pausen zwischen 30 und 120 Minuten:\n\n';
-
-        if (pauses9.length === 0) {
-          pText += 'Keine Pausen im Bereich 30–120 Minuten gefunden.';
-        } else {
-          const uniqueIds9 = [...new Set(pauses9.map(p => p.id))].sort(
-            (a, b) => a - b
-          );
-
-          uniqueIds9.forEach(id => {
-            const list = pauses9
-              .filter(p => p.id === id)
-              .sort((a, b) => a.from.startMin - b.from.startMin);
-
-            pText += `ID ${id}:\n`;
-
-            const hasBVConform = list.some(p => p.workInRange);
-
-            list.forEach(p => {
-              const from = p.from;
-              const to   = p.to;
-
-              const fromCourse = formatCourse9(from.course);
-              const toCourse   = formatCourse9(to.course);
-
-              const fromLoc = (from.endLoc   || '').trim();
-              const toLoc   = (to.startLoc   || '').trim();
-              const pauseLoc = (fromLoc || toLoc).toUpperCase();
-
-              // Mindestpause je Pausenort
-              const isSpecial   = SPECIAL_LOCATIONS9.includes(pauseLoc);
-              const requiredMin = isSpecial ? 39 : 33;
-              let pauseHint = '';
-
-              if (p.gap < requiredMin) {
-                pauseHint =
-                  ` (zu kurz, Mindestpause am Ort ${pauseLoc || 'unbekannt'}: ${requiredMin} min)`;
-              } else {
-                pauseHint =
-                  ` (Mindestpause erfüllt: ${requiredMin} min)`;
-              }
-
-              // Arbeitszeit vor der Pause (nur kommentieren, BV-Verstoß erst am Ende je Dienst)
-              let workHint = '';
-              if (p.workUnknown) {
-                workHint =
-                  ' (Arbeitszeit vor Pause aus Spalte O/J nicht auswertbar)';
-              } else if (p.workInRange) {
-                workHint =
-                  ` (Arbeitszeit vor Pause ${p.workDurStr} – im Bereich 03:30 bis 04:30 Stunden)`;
-              } else {
-                workHint =
-                  ` (Arbeitszeit vor Pause ${p.workDurStr} – außerhalb 03:30 bis 04:30 Stunden)`;
-              }
-
-              pText +=
-                `  Pause: ${from.endStr} ${fromLoc}${fromCourse}` +
-                ` → ${to.startStr} ${toLoc}${toCourse}` +
-                ` | ${p.gap} min` +
-                `${pauseHint}${workHint}\n`;
-            });
-
-            // Zusammenfassender BV-Hinweis pro Dienst
-            if (list.some(p => !p.workUnknown)) {
-              if (hasBVConform) {
-                pText +=
-                  '  -> BV-Hinweis: Mindestens eine Pause mit vorangehender Arbeitszeit zwischen 03:30 und 04:30 Stunden vorhanden (BV-konform).\n\n';
-              } else {
-                pText +=
-                  '  -> BV-Hinweis: Keine Pause mit vorangehender Arbeitszeit zwischen 03:30 und 04:30 Stunden – Dienst nicht BV-konform.\n\n';
-              }
-            } else {
-              pText +=
-                '  -> BV-Hinweis: Arbeitszeiten vor Pausen (Spalte O/J) nicht auswertbar.\n\n';
-            }
-          });
-        }
-
-        document.getElementById('pause-result').textContent = pText.trim();
-
-
-      };
-
-      reader.readAsArrayBuffer(file);
-    });
-  </script>
-
-  <!-- KI-Chat Logik -->
-  <script>
-    (function() {
-      const CHAT_API_URL = 'https://dienstplan-ki-backend.onrender.com/chat';
-
-      const toggleBtn = document.getElementById('chat-toggle');
-      const chatWin   = document.getElementById('chat-window');
-      const closeBtn  = document.getElementById('chat-close');
-      const msgBox    = document.getElementById('chat-messages');
-      const input     = document.getElementById('chat-input');
-      const sendBtn   = document.getElementById('chat-send');
-
-      function appendMessage(text, who) {
-        const div = document.createElement('div');
-        div.className = 'chat-message ' + (who === 'user' ? 'user' : 'bot');
-        const span = document.createElement('span');
-        span.textContent = text;
-        div.appendChild(span);
-        msgBox.appendChild(div);
-        msgBox.scrollTop = msgBox.scrollHeight;
-      }
-
-      function toggleChat() {
-        const visible = chatWin.style.display === 'flex';
-        chatWin.style.display = visible ? 'none' : 'flex';
-        if (!visible) {
-          input.focus();
-        }
-      }
-
-      toggleBtn.addEventListener('click', toggleChat);
-      closeBtn.addEventListener('click', () => {
-        chatWin.style.display = 'none';
-      });
-
-      async function sendMessage() {
-        const text = input.value.trim();
-        if (!text) return;
-        appendMessage(text, 'user');
-        input.value = '';
-
-        try {
-          appendMessage('...denke nach...', 'bot');
-          const thinkingNode = msgBox.lastChild;
-
-          const response = await fetch(CHAT_API_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ question: text })
-          });
-
-          msgBox.removeChild(thinkingNode);
-
-          if (!response.ok) {
-            appendMessage('Fehler bei der Anfrage an das KI-Backend.', 'bot');
-            return;
-          }
-
-          const data = await response.json();
-          const answer = data.answer || 'Keine Antwort vom Backend erhalten.';
-          appendMessage(answer, 'bot');
-        } catch (err) {
-          appendMessage('Es ist ein Verbindungsfehler zum KI-Backend aufgetreten.', 'bot');
-        }
-      }
-
-      sendBtn.addEventListener('click', sendMessage);
-      input.addEventListener('keydown', e => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-          e.preventDefault();
-          sendMessage();
-        }
-      });
-    })();
-  </script>
-
-  <!-- Suchlogik -->
-  <script>
-    (function() {
-      const searchInput = document.getElementById('search-input');
-      const clearBtn    = document.getElementById('search-clear');
-      const info        = document.getElementById('search-info');
-
-      if (!searchInput || !info) return;
-
-      const resultIds = [
-        'count-result',
-        'shared-result',
-        'reserve-result',
-        'long-result',
-        'loc-result',
-        'segment-result',
-        'shift-result',
-        'route-result',
-        'pause-result'
-      ];
-
-      function applySearch() {
-        const term = searchInput.value.trim().toLowerCase();
-        let hitCount = 0;
-
-        resultIds.forEach(id => {
-          const resEl = document.getElementById(id);
-          if (!resEl) return;
-          const blockEl = resEl.closest('.block') || resEl;
-
-          if (!term) {
-            blockEl.style.display = '';
-            return;
-          }
-
-          const text = resEl.textContent.toLowerCase();
-          if (text.includes(term)) {
-            blockEl.style.display = '';
-            hitCount++;
-          } else {
-            blockEl.style.display = 'none';
-          }
-        });
-
-        if (!term) {
-          info.textContent = 'Geben Sie einen Suchbegriff ein, um die Ergebnis-Blöcke zu filtern.';
-        } else if (hitCount === 0) {
-          info.textContent = `Keine Treffer für „${searchInput.value}“.`;
-        } else {
-          info.textContent = `${hitCount} Block/Blöcke enthalten „${searchInput.value}“.`;
-        }
-      }
-
-      searchInput.addEventListener('input', applySearch);
-
-      if (clearBtn) {
-        clearBtn.addEventListener('click', () => {
-          searchInput.value = '';
-          applySearch();
-        });
-      }
-    })();
-  </script>
-    <script>
-    (function () {
-      const askBtn     = document.getElementById('plan-ask');
-      const questionEl = document.getElementById('plan-question');
-      const resultEl   = document.getElementById('plan-answer');
-      if (!askBtn || !questionEl || !resultEl) return;
-
-      // Gleiche Backend-URL wie beim KI-Chat benutzen!
-      // Falls dein Service-Namen anders lautet, HIER anpassen:
-      const CHAT_API_URL = 'https://dienstplan-ki-backend.onrender.com/chat';
-
-      // Mapping: Ergebnis-Element -> "sprechender Block-Name" für die Überschrift
-      const BLOCK_LABELS = {
-        'count-result':   'Block 1 – Anzahl eindeutige Dienste',
-        'shared-result':  'Block 2 – Geteilte Dienste',
-        'reserve-result': 'Block 3 – Reserve Dienste',
-        'long-result':    'Block 4 – Dienste > 08:30h',
-        'loc-result':     'Block 5 – unterschiedliche Start- und End-Orte',
-        'segment-result': 'Block 6 – Dienstteilstücke > 04:30h und Linie/Kurs',
-        'shift-result':   'Block 7 – Schichtzuweisung anhand des Dienstbeginns',
-        'route-result':   'Block 8 – Dienste nach Linie/Kurs',
-        'pause-result':   'Block 9 – Pausen zwischen 30 und 120 Minuten'
-      };
-
-      const ANALYSIS_RESULT_IDS = Object.keys(BLOCK_LABELS);
-
-      // Auswertungstexte gesammelt nach Blöcken holen
-      function collectAnalysisTextByBlock() {
-        const blocks = [];
-        ANALYSIS_RESULT_IDS.forEach(id => {
-          const el = document.getElementById(id);
-          if (!el) return;
-          const text = (el.textContent || '').trim();
-          if (!text || /^Warte/.test(text) || text === '-') return;
-
-          const label = BLOCK_LABELS[id] || id;
-          blocks.push({
-            id,
-            label,
-            text
-          });
-        });
-        return blocks;
-      }
-
-      async function askPlanQuestion() {
-        const userQuestion = questionEl.value.trim();
-        if (!userQuestion) {
-          resultEl.textContent =
-            'Bitte geben Sie eine Frage ein (z. B. „Alles zu ID 122“).';
-          return;
-        }
-
-        const blocks = collectAnalysisTextByBlock();
-        if (!blocks.length) {
-          resultEl.textContent =
-            'Es liegen noch keine Auswertungen vor. Bitte zuerst eine Datei laden, damit die Blöcke 1–9 berechnet werden.';
-          return;
-        }
-
-        resultEl.textContent =
-          'KI wertet die Auswertungen aus und beantwortet Ihre Frage...';
-
-        // Kontext für die KI als Klartext aufbereiten
-        let contextText = '';
-        blocks.forEach(b => {
-          contextText += `${b.label}:\n${b.text}\n\n`;
-        });
-
-        // Prompt so formulieren, dass die Antwort immer nach Blöcken gegliedert ist
-        const prompt =
-          'Du bist eine spezialisierte KI, die Fragen zu einem ausgewerteten Dienstplan beantwortet.\n\n' +
-          'Unten findest du die Auswertungstexte aus mehreren Blöcken (Block 1–9). ' +
-          'Jeder Block hat bereits berechnete Informationen (IDs, Schichten, Linien/Kurse, Pausen etc.).\n\n' +
-          'AUFGABE:\n' +
-          '- Beantworte die Benutzerfrage ausschließlich auf Basis dieser Auswertungen (keine eigenen Daten annehmen).\n' +
-          '- Wenn nach einer konkreten Dienst-ID gefragt wird (z. B. „ID 122“), suche in ALLEN Blöcken nach dieser ID.\n' +
-          '- Strukturiere deine Antwort IMMER mit Überschriften je Block, in dem du Informationen findest.\n' +
-          '- Nutze genau diese Form der Überschriften:\n' +
-          '  * Block 1 – Anzahl eindeutige Dienste\n' +
-          '  * Block 2 – Geteilte Dienste\n' +
-          '  * Block 3 – Reserve Dienste\n' +
-          '  * Block 4 – Dienste > 08:30h\n' +
-          '  * Block 5 – unterschiedliche Start- und End-Orte\n' +
-          '  * Block 6 – Dienstteilstücke > 04:30h und Linie/Kurs\n' +
-          '  * Block 7 – Schichtzuweisung anhand des Dienstbeginns\n' +
-          '  * Block 8 – Dienste nach Linie/Kurs\n' +
-          '  * Block 9 – Pausen zwischen 30 und 120 Minuten\n' +
-          '- Gib NUR die Blöcke aus, in denen du relevante Informationen zur Frage findest.\n' +
-          '- Unter jeder Block-Überschrift liste die Infos in kurzen Stichpunkten auf.\n' +
-          '- Wenn du zu einer ID oder Frage wirklich GAR KEINE Information findest, schreibe dies ausdrücklich.\n\n' +
-          'AUSWERTUNGSTEXTE NACH BLÖCKEN:\n\n' +
-          contextText +
-          '\nFRAGE DES BENUTZERS:\n' +
-          userQuestion +
-          '\n\nANTWORTE NUN strukturiert wie beschrieben:';
-
-        try {
-          const response = await fetch(CHAT_API_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ question: prompt })
-          });
-
-          if (!response.ok) {
-            resultEl.textContent =
-              'Fehler bei der Anfrage an das KI-Backend.';
-            return;
-          }
-
-          const data = await response.json();
-          const answer = data.answer || 'Keine Antwort vom KI-Backend erhalten.';
-          resultEl.textContent = answer;
-        } catch (err) {
-          resultEl.textContent =
-            'Es ist ein Verbindungsfehler zum KI-Backend aufgetreten.';
-        }
-      }
-
-      askBtn.addEventListener('click', askPlanQuestion);
-    })();
-  </script>
+	<div class="container">
+		<h1>Dienstplan-Analyse (Schritt für Schritt)</h1>
+
+		<!-- Block 0 -->
+		<div class="block">
+			<h2>0. Datei auswählen</h2>
+			<input id="file-input" type="file" accept=".xlsx,.xls" />
+			<div id="file-result" class="result">Noch keine Datei ausgewählt.</div>
+		</div>
+
+		<!-- Such-Block -->
+		<div class="block">
+			<h2>Suche in den Auswertungen</h2>
+			<div style="display:flex; gap:0.5rem; margin-bottom:0.5rem; flex-wrap:wrap;">
+				<input id="search-input" type="text" placeholder="z. B. ID 72, 5/11, BBU ..." style="flex:1; min-width:180px; padding:0.4rem; border-radius:8px; border:1px solid #b0bec5;" />
+				<button id="search-clear" style="border:none; border-radius:999px; padding:0.4rem 0.9rem; background:#0277bd; color:#fff; cursor:pointer;">
+					Zurücksetzen
+				</button>
+			</div>
+			<div id="search-info" class="result">
+				Geben Sie einen Suchbegriff ein, um die Ergebnis-Blöcke zu filtern.
+			</div>
+		</div>
+
+		<!-- Block 1 -->
+		<div class="block">
+			<h2>1. Anzahl eindeutige Dienste</h2>
+			<div id="plan-type-result" class="result">Noch kein Dienstplan erkannt.</div>
+			<div id="count-result" class="result">Warte...</div>
+		</div>
+
+		<!-- Block 2 -->
+		<div class="block">
+			<h2>2. Anzahl geteilte Dienste</h2>
+			<div id="shared-result" class="result">Warte...</div>
+		</div>
+
+		<!-- Block 3 -->
+		<div class="block">
+			<h2>3. Reserve Dienste</h2>
+			<p>IDs: 1, 100, 190, 90, 1101, 1102, 1201, 1202, 2101, 2102, 2201, 2202</p>
+			<div id="reserve-result" class="result">Warte...</div>
+		</div>
+
+		<!-- Block 4 -->
+		<div class="block">
+			<h2>4. Dienste &gt; 08:30h</h2>
+			<div id="long-result" class="result">Warte...</div>
+		</div>
+
+		<!-- Block 5 -->
+		<div class="block">
+			<h2>5. Dienste mit unterschiedlichen Start- und End-Orten</h2>
+			<div id="loc-result" class="result">Warte...</div>
+		</div>
+
+		<!-- Block 6 -->
+		<div class="block">
+			<h2>6. Dienste mit Dienstteilstück &gt;04:30h und Linie/Kurs</h2>
+			<div id="segment-result" class="result">Warte...</div>
+		</div>
+
+		<!-- Block 7 -->
+		<div class="block">
+			<h2>7. Schichtzuweisung anhand des Dienstbeginns</h2>
+			<div id="shift-result" class="result">Warte...</div>
+		</div>
+
+		<!-- Block 8 -->
+		<div class="block">
+			<h2>8. Dienste nach Linie/Kurs</h2>
+			<div id="route-result" class="result">Warte...</div>
+		</div>
+
+		<!-- Block 9 -->
+		<div class="block">
+			<h2>9. Pausen zwischen 30 und 120 Minuten</h2>
+			<div id="pause-result" class="result">Warte...</div>
+		</div>
+	</div>
+
+	<!-- Block 10 -->
+	<div class="block">
+		<h2>10. KI-Fragen zum ausgewerteten Dienstplan</h2>
+		<p>Stellen Sie hier Fragen zur Auswertung, z.&nbsp;B.: „Alles zu ID 122“ oder „Wo taucht Dienst 45 überall auf?“.</p>
+		<textarea id="plan-question" rows="3" placeholder="z. B. Alles zu ID 122, oder: Welche Schicht hat Dienst 87?" style="width:100%; padding:0.5rem; border-radius:8px; border:1px solid #b0bec5; font-family:inherit; font-size:0.95rem; margin-bottom:0.5rem;"></textarea>
+		<button id="plan-ask" style="border:none; border-radius:999px; padding:0.5rem 1.1rem; background:#0277bd; color:#fff; cursor:pointer; margin-bottom:0.7rem;">
+			Frage an KI stellen
+		</button>
+		<div id="plan-answer" class="result">
+			Noch keine KI-Anfrage gestellt.
+		</div>
+	</div>
+
+	<!-- KI-Chat Widget -->
+	<button class="chat-toggle" id="chat-toggle" title="Fragen zur Auswertung stellen">
+		💬
+	</button>
+	<div class="chat-window" id="chat-window">
+		<div class="chat-header">
+			<div>
+				KI-Hilfe
+				<br><span>Fragen zur Dienstplan-Analyse</span>
+				<br><span id="current-plan-display" style="font-size:0.8rem; opacity:0.9;">
+					Aktueller Plan: noch nicht erkannt.
+				</span>
+			</div>
+			<button class="chat-close" id="chat-close" aria-label="Chat schließen">×</button>
+		</div>
+		<div class="chat-messages" id="chat-messages">
+			<div class="chat-message bot">
+				<span>Hallo! Stellen Sie mir eine Frage zu den Auswertungen, z.&nbsp;B. „Was bedeutet Block 4?“.</span>
+			</div>
+		</div>
+		<div class="chat-input-area">
+			<textarea id="chat-input" rows="1" placeholder="Frage eingeben..."></textarea>
+			<button id="chat-send">Senden</button>
+		</div>
+	</div>
+
+	<!-- Analyse-Skript Blöcke 1–9 -->
+	<script>
+		document.getElementById('file-input').addEventListener('change', function() {
+			const file = this.files[0];
+			const blocks = [
+				'plan-type-result',
+				'count-result',
+				'shared-result',
+				'reserve-result',
+				'long-result',
+				'loc-result',
+				'segment-result',
+				'shift-result',
+				'route-result',
+				'pause-result'
+			];
+			document.getElementById('file-result').textContent =
+				file ? `Datei: ${file.name}` : 'Keine Datei ausgewählt.';
+			blocks.forEach(id =>
+				document.getElementById(id).textContent = file ? 'Warte auf Auswertung...' : '-'
+			);
+			if (!file) return;
+
+			const reader = new FileReader();
+			reader.onload = function(e) {
+				const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+				const rows = XLSX.utils.sheet_to_json(
+					wb.Sheets[wb.SheetNames[0]], { header: 1 }
+				);
+
+				// Block 1: eindeutige IDs
+				// Alle positiven numerischen Dienstnummern berücksichtigen (inkl. 1101ff, 2101ff usw.)
+				const ids = new Set();
+				for (let i = 1; i < rows.length; i++) {
+					const num = parseInt(rows[i][2], 10); // Spalte C
+					if (!isNaN(num) && num >= 1) {
+						ids.add(num);
+					}
+				}
+				// Dienstplan-Typ aus der Dienstnummernstruktur bestimmen
+				const idArray = Array.from(ids);
+				const hasAnyInRange = (min, max) =>
+					idArray.some(id => id >= min && id <= max);
+
+				let fahrzeug = null;
+				let zeitraum = null;
+
+				// Straßenbahn: 1101–1199, 1201–1299, 1301–1399, 1401–1499
+				if (hasAnyInRange(1101, 1499)) {
+					fahrzeug = 'Straßenbahn';
+					if (hasAnyInRange(1101, 1199)) {
+						zeitraum = 'Mo–Fr Schule';
+					} else if (hasAnyInRange(1201, 1299)) {
+						zeitraum = 'Mo–Fr Ferien';
+					} else if (hasAnyInRange(1301, 1399)) {
+						zeitraum = 'Samstag';
+					} else if (hasAnyInRange(1401, 1499)) {
+						zeitraum = 'Sonntag';
+					}
+					// Bus: 2101–2199, 2201–2299, 2301–2399, 2401–2499
+				} else if (hasAnyInRange(2101, 2499)) {
+					fahrzeug = 'Bus';
+					if (hasAnyInRange(2101, 2199)) {
+						zeitraum = 'Mo–Fr Schule';
+					} else if (hasAnyInRange(2201, 2299)) {
+						zeitraum = 'Mo–Fr Ferien';
+					} else if (hasAnyInRange(2301, 2399)) {
+						zeitraum = 'Samstag';
+					} else if (hasAnyInRange(2401, 2499)) {
+						zeitraum = 'Sonntag';
+					}
+				}
+
+				let planHinweis = '';
+				if (fahrzeug && zeitraum) {
+					planHinweis = `${fahrzeug} – ${zeitraum}`;
+				} else if (fahrzeug) {
+					planHinweis = `${fahrzeug} (Zeitraum nicht eindeutig erkennbar)`;
+				} else {
+					planHinweis = 'Dienstplan-Typ anhand der Nummern nicht eindeutig erkennbar (vermutlich ältere Struktur).';
+				}
+
+				document.getElementById('plan-type-result').textContent =
+					`Erkannter Dienstplan: ${planHinweis}`;
+				const planDisplay = document.getElementById('current-plan-display');
+				if (planDisplay) {
+					planDisplay.textContent = `Aktueller Plan: ${planHinweis}`;
+				}
+				document.getElementById('count-result').textContent =
+					`Anzahl eindeutiger Dienst-IDs: ${ids.size}`;
+
+				// Block 2: geteilte Dienste mit Schichtdauer-Prüfung (O/P, max. 12:00h)
+
+				// Bereiche für geteilte Dienste:
+				// 40–59, 140–159, 1140–1159, 1240–1259, 2140–2159, 2240–2259
+				function isSharedService(id) {
+					return (
+						(id >= 40 && id <= 59) || // ursprüngliche geteilte Dienste
+						(id >= 140 && id <= 159) || // ursprüngliche geteilte Dienste
+						(id >= 1140 && id <= 1159) || // Mo–Fr Schule Straßenbahn geteilt
+						(id >= 1240 && id <= 1259) || // Mo–Fr Ferien Straßenbahn geteilt
+						(id >= 2140 && id <= 2159) || // Mo–Fr Schule Bus geteilt
+						(id >= 2240 && id <= 2259) // Mo–Fr Ferien Bus geteilt
+					);
+				}
+
+				// HH:MM -> Minuten
+				function parseTimeToMinutes(str) {
+					if (typeof str !== 'string') return null;
+					const m = str.match(/^(\d{1,2}):(\d{2})$/);
+					if (!m) return null;
+					const h = parseInt(m[1], 10);
+					const mi = parseInt(m[2], 10);
+					if (isNaN(h) || isNaN(mi)) return null;
+					return h * 60 + mi;
+				}
+
+				const sharedIds = [...ids].filter(id => isSharedService(id));
+				const sharedIdsSorted = sharedIds.slice().sort((a, b) => a - b);
+				const sharedSet = new Set(sharedIdsSorted);
+
+				// Für jede geteilte ID: erste Zeit aus Spalte O (Index 14) und
+				// letzte Zeit aus Spalte P (Index 15) bestimmen
+				const sharedInfo = new Map(); // id -> { minStart, maxEnd }
+				let currentIdShared = null;
+
+				for (let i = 1; i < rows.length; i++) {
+					const row = rows[i];
+
+					const idCell = row[2];
+					if (/^\d+$/.test(idCell)) {
+						currentIdShared = parseInt(idCell, 10);
+					}
+
+					if (!sharedSet.has(currentIdShared)) continue;
+
+					const startStr = row[14]; // Spalte O
+					const endStr = row[15]; // Spalte P
+
+					const startMin = parseTimeToMinutes(startStr);
+					const endMin = parseTimeToMinutes(endStr);
+
+					if (!sharedInfo.has(currentIdShared)) {
+						sharedInfo.set(currentIdShared, { minStart: null, maxEnd: null });
+					}
+					const info = sharedInfo.get(currentIdShared);
+
+					if (startMin !== null) {
+						if (info.minStart === null || startMin < info.minStart) {
+							info.minStart = startMin;
+						}
+					}
+
+					if (endMin !== null) {
+						if (info.maxEnd === null || endMin > info.maxEnd) {
+							info.maxEnd = endMin;
+						}
+					}
+				}
+
+				// Auswertung: Schichtdauer und Prüfung > 12:00h
+				const over12 = [];
+				const lines = [];
+
+				sharedIdsSorted.forEach(id => {
+					const info = sharedInfo.get(id);
+					if (!info || info.minStart === null || info.maxEnd === null) {
+						lines.push(`ID ${id}: keine gültigen Zeiten in Spalte O/P gefunden`);
+						return;
+					}
+
+					let diff = info.maxEnd - info.minStart;
+
+					// über Mitternacht
+					if (diff < 0) diff += 24 * 60;
+
+					const h = Math.floor(diff / 60);
+					const m = diff % 60;
+					const durStr = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+
+					lines.push(`ID ${id}: Schichtdauer ${durStr} (Spalte O → P)`);
+
+					if (diff > 12 * 60) {
+						over12.push(`ID ${id} (${durStr})`);
+					}
+				});
+
+				let sharedText =
+					`Anzahl geteilte Dienste: ${sharedIdsSorted.length}\n` +
+					`IDs: ${sharedIdsSorted.join(', ')}`;
+
+				if (sharedIdsSorted.length > 0) {
+					sharedText +=
+						`\n\nSchichtdauer je geteilter Dienst (erste Zeit in Spalte O bis letzte Zeit in Spalte P):\n` +
+						lines.join('\n');
+				}
+
+				if (sharedIdsSorted.length === 0) {
+					sharedText += `\n\nKeine geteilten Dienste gefunden.`;
+				} else if (over12.length === 0) {
+					sharedText += `\n\nAlle geteilten Dienste liegen bei maximal 12:00h Schichtdauer.`;
+				} else {
+					sharedText +=
+						`\n\nAchtung: folgende geteilte Dienste überschreiten 12:00h Schichtdauer:\n` +
+						over12.join(', ');
+				}
+
+				document.getElementById('shared-result').textContent = sharedText;
+
+				// Block 3: Reserve Dienste
+				// Bisherige + neue Reserve-Dienstnummern:
+				// 1, 90, 100, 190,
+				// 1101, 1102, 1201, 1202, 1301, 1302, 1401, 1402,
+				// 2101, 2102, 2201, 2202, 2301, 2302, 2401, 2402
+				const reserveIds = [
+					1, 100, 190, 90, // ursprüngliche Reserve
+					1101, 1102, 1201, 1202, // Mo–Fr Schule / Ferien Straßenbahn
+					1301, 1302, 1401, 1402, // Sa / So Straßenbahn
+					2101, 2102, 2201, 2202, // Mo–Fr Schule / Ferien Bus
+					2301, 2302, 2401, 2402 // Sa / So Bus
+				];
+
+				const foundReserve = reserveIds.filter(id => ids.has(id));
+				document.getElementById('reserve-result').textContent =
+					`Anzahl Reserve-Dienste: ${foundReserve.length}\nIDs: ${foundReserve.sort((a,b)=>a-b).join(', ')}`;
+
+				// Block 4: Dienste >08:30h ohne Reserve
+				const longSet = new Set();
+				let lastL = null;
+				rows.slice(1).forEach(r => {
+					if (/^\d+$/.test(r[2])) lastL = parseInt(r[2], 10);
+					const raw = r[16];
+					if (lastL != null && typeof raw === 'string') {
+						const [h, m] = raw.split(':').map(Number);
+						if (h > 8 || (h === 8 && m > 30)) longSet.add(lastL);
+					}
+				});
+				document.getElementById('long-result').textContent =
+					`Dienste >08:30h: ${[...longSet].sort((a, b) => a - b).join(', ')}`;
+
+				// Block 5: unterschiedliche Orte
+				const eq = new Set(['BBU', 'BUP', 'BBN', 'NSL']);
+				const locSet = new Set();
+				let currentId5 = null,
+					start5 = null;
+				rows.slice(1).concat([
+					[]
+				]).forEach((r, i, a) => {
+					if (/^\d+$/.test(r[2])) {
+						if (currentId5 != null && start5) {
+							const prev = a[i - 1] || [];
+							const end = prev[10] || '';
+							if (end && start5 !== end && !(eq.has(start5) && eq.has(end))) {
+								locSet.add(currentId5);
+							}
+						}
+						currentId5 = parseInt(r[2], 10);
+						start5 = r[6] || '';
+					} else if (!r.some(c => c != null && c !== '')) {
+						if (currentId5 != null && start5) {
+							const prev = a[i - 1] || [];
+							const end = prev[10] || '';
+							if (end && start5 !== end && !(eq.has(start5) && eq.has(end))) {
+								locSet.add(currentId5);
+							}
+						}
+						currentId5 = null;
+						start5 = null;
+					}
+				});
+				document.getElementById('loc-result').textContent =
+					`Unterschiedliche Orte: ${[...locSet].sort((a, b) => a - b).join(', ')}`;
+
+				// Block 6: Dienstteilstücke >04:30h und Hinweis bei >06:00h
+				// - Reserve-Dienste werden nicht berücksichtigt
+				// - Nachtdienste über 0:00 Uhr werden korrekt bewertet
+				// - Dienstteile mit Pause <30 min zwischen zwei Stücken werden kombiniert geprüft
+
+				const reserveIdSet = new Set(reserveIds || []);
+
+				function diffMinutes(startMin, endMin) {
+					// Differenz in Minuten, korrekt über Mitternacht
+					let diff = endMin - startMin;
+					if (diff < 0) diff += 24 * 60;
+					return diff;
+				}
+
+				function formatDuration(totalMin) {
+					const h = Math.floor(totalMin / 60);
+					const m = totalMin % 60;
+					return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+				}
+
+				function formatCourseLabel(c) {
+					const cc = (c || '').trim();
+					// Linie/Kurs in Form 5/11 usw.
+					if (/^[0-9]{1,2}\/\d{1,2}$/.test(cc)) return ` (${cc})`;
+					return cc ? ` (${cc})` : '';
+				}
+
+				// Alle Dienstteilstücke je ID sammeln (ohne Reserve-Dienste)
+				const segmentsById6 = new Map();
+				let currentId6 = null;
+
+				rows.slice(1).forEach(r => {
+					const idCell = r[2];
+
+					if (/^\d+$/.test(idCell)) {
+						currentId6 = parseInt(idCell, 10);
+					}
+
+					// komplett leere Zeile beendet den Dienst
+					if (!r.some(c => c != null && c !== '')) {
+						currentId6 = null;
+						return;
+					}
+
+					if (currentId6 == null) return;
+
+					// Reserve-Dienste für diese Auswertung ignorieren
+					if (reserveIdSet.has(currentId6)) return;
+
+					const startStr = r[5];
+					const endStr = r[9];
+
+					if (
+						typeof startStr !== 'string' ||
+						typeof endStr !== 'string' ||
+						!/^[0-9]{1,2}:[0-9]{2}$/.test(startStr) ||
+						!/^[0-9]{1,2}:[0-9]{2}$/.test(endStr)
+					) {
+						return;
+					}
+
+					const [sh, sm] = startStr.split(':').map(Number);
+					const [eh, em] = endStr.split(':').map(Number);
+					const startMin = sh * 60 + sm;
+					const endMin = eh * 60 + em;
+
+					const courseRaw = r[4];
+					const course =
+						typeof courseRaw === 'string' && courseRaw.trim() ?
+						courseRaw.trim() :
+						'';
+
+					if (!segmentsById6.has(currentId6)) {
+						segmentsById6.set(currentId6, []);
+					}
+
+					// Reihenfolge der Zeilen beibehalten (Excel ist chronologisch)
+					segmentsById6.get(currentId6).push({
+						startMin,
+						endMin,
+						startStr,
+						endStr,
+						course
+					});
+				});
+
+				// Auswertung: >4:30h und >6:00h (inkl. kombinierter Dienstteile)
+				const over45ById = new Map(); // id -> Array Textzeilen zu diesem Dienst
+				const idsOver6 = new Set(); // Dienste mit mind. einem Segment >6h
+
+				segmentsById6.forEach((segs, id) => {
+					if (!segs.length) return;
+
+					const lines = [];
+
+					// 1) Einzelsegmente prüfen
+					for (let i = 0; i < segs.length; i++) {
+						const s = segs[i];
+						const dur = diffMinutes(s.startMin, s.endMin); // korrekt über Mitternacht
+						if (dur > 270) { // >4:30h
+							const durStr = formatDuration(dur);
+							const courseLabel = formatCourseLabel(s.course);
+							lines.push(
+								`  Einzelsegment ${s.startStr}–${s.endStr}${courseLabel} | Dauer ${durStr}`
+							);
+							if (dur > 360) { // >6:00h
+								idsOver6.add(id);
+							}
+						}
+					}
+
+					// 2) Kombinierte Dienstteile: Pause <30 Minuten zwischen zwei Stücken
+					// (gilt auch für Dienste mit 3 oder mehr Dienstteilen)
+					for (let i = 0; i < segs.length - 1; i++) {
+						const a = segs[i];
+						const b = segs[i + 1];
+
+						const gap = diffMinutes(a.endMin, b.startMin); // Pause zwischen Ende a und Beginn b
+						if (gap < 30) {
+							const durComb = diffMinutes(a.startMin, b.endMin);
+							if (durComb > 270) { // >4:30h kombiniert
+								const durStr = formatDuration(durComb);
+
+								const courses = [a.course, b.course]
+									.filter(c => c && c.trim())
+									.map(c => c.trim());
+								const courseInfo = courses.length ?
+									` (${courses.join(' / ')})` :
+									'';
+
+								lines.push(
+									`  Kombiniert: ${a.startStr}–${a.endStr} und ${b.startStr}–${b.endStr}${courseInfo}` +
+									` | Pause ${gap} Min, Gesamtdauer ${durStr}`
+								);
+
+								if (durComb > 360) { // >6:00h kombiniert
+									idsOver6.add(id);
+								}
+							}
+						}
+					}
+
+					if (lines.length) {
+						over45ById.set(id, lines);
+					}
+				});
+
+				let segTxt =
+					`Dienstteilstücke >04:30h (ohne Reserve-Dienste, inkl. kombinierter Teile mit Pause <30 Min): ` +
+					`${over45ById.size}\n`;
+
+				if (over45ById.size === 0) {
+					segTxt += '\nKeine relevanten Dienstteilstücke gefunden.';
+				} else {
+					segTxt += '\n';
+
+					[...over45ById.entries()]
+					.sort((a, b) => a[0] - b[0])
+						.forEach(([id, lines]) => {
+							segTxt += `ID ${id}:\n`;
+							lines.forEach(line => {
+								segTxt += line + '\n';
+							});
+
+							if (idsOver6.has(id)) {
+								segTxt +=
+									'  Hinweis: Bitte Fahrtafel prüfen ob 1/6 Dienst und Standzeiten ausreichen.\n';
+							}
+
+							segTxt += '\n';
+						});
+				}
+
+				document.getElementById('segment-result').textContent = segTxt.trim();
+
+
+				// Block 7: Schichtzuweisung inkl. separater Ausweisung geteilter Dienste (GF1, GF2, ...)
+				const shiftRules = [
+					{ name: 'F1', start: 170, end: 270 },
+					{ name: 'F2', start: 271, end: 371 },
+					{ name: 'F3', start: 372, end: 614 },
+					{ name: 'S1', start: 615, end: 779 },
+					{ name: 'S2', start: 780, end: 1159 },
+					{ name: 'N', start: 1160, end: 1440 }
+				];
+
+				const shiftCount = {}; // alle Dienste nach F1, F2, ...
+				const sharedShiftCount = {}; // nur geteilte Dienste, z.B. GF1, GF2, ...
+				const assignments = []; // je Dienst: zugewiesene Schicht
+				let lastId7 = null;
+
+				// Set der geteilten Dienste (aus Block 2)
+				const sharedIdSet = new Set([...ids].filter(id => isSharedService(id)));
+
+				rows.slice(1).forEach(r => {
+					if (/^[0-9]+$/.test(r[2])) {
+						lastId7 = parseInt(r[2], 10);
+					}
+
+					const tm = r[5]; // Spalte F: Dienstbeginn
+					if (lastId7 != null && typeof tm === 'string') {
+						const m = tm.match(/^(\d{1,2}):(\d{2})$/);
+						if (m) {
+							const mins = parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+							const rule = shiftRules.find(s => mins >= s.start && mins < s.end);
+							const baseName = rule ? rule.name : 'Unbekannte';
+
+							// Pro Dienst-ID nur einmal zuweisen (erster gefundener Dienstbeginn)
+							if (!assignments.some(a => a.id === lastId7)) {
+								const isShared = sharedIdSet.has(lastId7);
+								let finalName = baseName;
+
+								// geteilte Dienste bekommen eigene Schichtlage GF1, GF2, ...
+								if (isShared && baseName !== 'Unbekannte') {
+									finalName = 'G' + baseName;
+								}
+
+								assignments.push({ id: lastId7, shift: finalName, isShared });
+
+								// Gesamtzählung nach Grund-Schichtlage (F1, F2, ...), aber OHNE geteilte Dienste
+								if (!isShared) {
+									shiftCount[baseName] = (shiftCount[baseName] || 0) + 1;
+								}
+
+								// separate Zählung geteilte Dienste nach GF1, GF2, ...
+								if (isShared && baseName !== 'Unbekannte') {
+									sharedShiftCount[finalName] = (sharedShiftCount[finalName] || 0) + 1;
+								}
+							}
+						}
+					}
+				});
+
+				let shText = 'Schichtzählung (nicht geteilte Dienste nach F1, F2, F3, S1, S2, N):\n';
+				Object.entries(shiftCount)
+					.sort((a, b) => a[0].localeCompare(b[0], 'de'))
+					.forEach(([name, count]) => {
+						shText += `${name}: ${count}\n`;
+					});
+
+				shText += '\nGeteilte Dienste mit separater Schichtlage (GF1, GF2, ...):\n';
+				const sharedKeys = Object.keys(sharedShiftCount);
+				if (sharedKeys.length === 0) {
+					shText += 'Keine geteilten Dienste mit zugewiesener Schichtlage gefunden.\n';
+				} else {
+					sharedKeys
+						.sort((a, b) => a.localeCompare(b, 'de'))
+						.forEach(name => {
+							shText += `${name}: ${sharedShiftCount[name]}\n`;
+						});
+				}
+
+				shText += '\nZuteilung je Dienst-ID:\n';
+				assignments
+					.sort((a, b) => a.id - b.id)
+					.forEach(a => {
+						shText += `ID ${a.id}: ${a.shift}${a.isShared ? ' (geteilt)' : ''}\n`;
+					});
+
+				document.getElementById('shift-result').textContent = shText.trim();
+
+
+				// Block 8: Dienste nach Linie/Kurs (mit nächster Zeile derselben ID)
+				const idOccurrences = new Map(); // id -> [{rowIndex, start, sLoc, course}, ...]
+				let currentIdOcc = null;
+
+				rows.slice(1).forEach((r, idx) => {
+					if (/^\d+$/.test(r[2])) currentIdOcc = parseInt(r[2], 10);
+
+					const start = r[5];
+					const sLoc = r[6] || '';
+					const courseRaw = r[4];
+					const hasValidTime =
+						typeof start === 'string' && /^[0-9]{1,2}:[0-9]{2}$/.test(start);
+					const course =
+						typeof courseRaw === 'string' &&
+						/^[0-9]{1,2}\/\d{1,2}$/.test(courseRaw.trim()) ?
+						courseRaw.trim() :
+						'';
+
+					if (currentIdOcc != null && hasValidTime) {
+						if (!idOccurrences.has(currentIdOcc)) {
+							idOccurrences.set(currentIdOcc, []);
+						}
+						idOccurrences.get(currentIdOcc).push({
+							rowIndex: idx + 1,
+							start,
+							sLoc,
+							course
+						});
+					}
+				});
+
+				const routeMap2 = new Map();
+				let lastId8b = null;
+
+				rows.slice(1).forEach((r, idx) => {
+					if (/^[0-9]+$/.test(r[2])) lastId8b = parseInt(r[2], 10);
+					const keyRaw = r[4];
+
+					if (
+						typeof keyRaw === 'string' &&
+						/^[0-9]{1,2}\/\d{1,2}$/.test(keyRaw.trim())
+					) {
+						const key = keyRaw.trim();
+						const start = r[5] || '';
+						const end = r[9] || '';
+						const sLoc = r[6] || '';
+						const eLoc = r[10] || '';
+
+						if (!routeMap2.has(key)) routeMap2.set(key, []);
+						routeMap2.get(key).push({
+							id: lastId8b,
+							start,
+							end,
+							sLoc,
+							eLoc,
+							rowIndex: idx + 1
+						});
+					}
+				});
+
+				const sortedKeys = [...routeMap2.keys()].sort((a, b) => {
+					const [l1, c1] = a.split('/').map(Number);
+					const [l2, c2] = b.split('/').map(Number);
+					return l1 - l2 || c1 - c2;
+				});
+
+				let rt = 'Dienste nach Linie/Kurs:\n';
+				sortedKeys.forEach(key => {
+					rt += `${key}:\n`;
+
+					const entries = routeMap2
+						.get(key)
+						.filter(
+							entry =>
+							typeof entry.start === 'string' &&
+							/^[0-9]{1,2}:[0-9]{2}$/.test(entry.start)
+						)
+						.sort((a, b) => {
+							const [h1, m1] = a.start.split(':').map(Number);
+							const [h2, m2] = b.start.split(':').map(Number);
+							return h1 * 60 + m1 - (h2 * 60 + m2);
+						});
+
+					entries.forEach(entry => {
+						let line =
+							`  ID ${entry.id} ${entry.start} ${entry.sLoc}` +
+							` — ${entry.end} ${entry.eLoc}`;
+
+						const occList = idOccurrences.get(entry.id) || [];
+						const myPos = occList.findIndex(o => o.rowIndex === entry.rowIndex);
+
+						if (myPos !== -1 && myPos + 1 < occList.length) {
+							const next = occList[myPos + 1];
+							if (next.start && next.sLoc) {
+								const courseLabel = next.course ? ` ${next.course}` : '';
+								line += ` | ${next.start} ${next.sLoc}${courseLabel}`;
+							}
+						}
+
+						rt += line + '\n';
+					});
+
+					rt += '\n';
+				});
+
+				document.getElementById('route-result').textContent = rt.trim();
+
+				// Block 9: Pausen zwischen 30 und 120 Minuten
+				// Regeln:
+				// - Es werden Pausen zwischen 30 und 120 Minuten gesucht (Ende J -> Beginn F)
+				// - Geteilte Dienste 40–59 und 140–159 werden ignoriert
+				// - Pausenort HLZ/TGR/LGR: mindestens 39 Minuten, sonst mindestens 33 Minuten
+				// - BV-Regel: Mindestens eine Pause, deren vorhergehende Arbeitszeit (Spalte O -> J)
+				//   zwischen 3,5 h und 4,5 h liegt.
+				//   Bei Diensten mit 3 Dienstteilen und 2 Pausen wird für die zweite Pause
+				//   die Arbeitszeit von O des 1. Dienstteils bis J des 2. Dienstteils berechnet.
+
+				function parseTimeToMin9(str) {
+					if (typeof str !== 'string') return null;
+					const m = str.match(/^(\d{1,2}):(\d{2})$/);
+					if (!m) return null;
+					const h = parseInt(m[1], 10);
+					const mi = parseInt(m[2], 10);
+					if (isNaN(h) || isNaN(mi)) return null;
+					return h * 60 + mi;
+				}
+
+				function diffMinutesOverMidnight9(startMin, endMin) {
+					if (startMin == null || endMin == null) return null;
+					let diff = endMin - startMin;
+					if (diff < 0) diff += 24 * 60;
+					return diff;
+				}
+
+				function formatMinutesToHHMM9(totalMin) {
+					if (totalMin == null) return '';
+					const h = Math.floor(totalMin / 60);
+					const m = totalMin % 60;
+					return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+				}
+
+				function formatCourse9(courseStr) {
+					const c = (courseStr || '').trim();
+					if (!c) return '';
+					return ` (${c})`;
+				}
+
+				function isIgnoredSplitService9(id) {
+					return (id >= 40 && id <= 59) || (id >= 140 && id <= 159);
+				}
+
+				const SPECIAL_LOCATIONS9 = ['HLZ', 'TGR', 'LGR'];
+				const MIN_BV_9 = 3.5 * 60; // 210
+				const MAX_BV_9 = 4.5 * 60; // 270
+
+				// Dienstteilstücke je Dienst-ID einsammeln (ohne geteilte Dienste 40–59, 140–159)
+				const segmentsById9 = new Map();
+				let currentId9 = null;
+				let seqCounter9 = 0;
+
+				rows.slice(1).forEach((r, idx) => {
+					const idCell = r[2];
+
+					if (/^\d+$/.test(idCell)) {
+						currentId9 = parseInt(idCell, 10);
+					}
+
+					// komplett leere Zeile beendet die Dienstverfolgung
+					if (!r.some(c => c != null && c !== '')) {
+						currentId9 = null;
+						return;
+					}
+
+					if (currentId9 == null) return;
+
+					const id = currentId9;
+
+					// geteilte Dienste 40–59 und 140–159 ignorieren
+					if (isIgnoredSplitService9(id)) return;
+
+					const startStr = r[5]; // Spalte F
+					const endStr = r[9]; // Spalte J
+					const startMin = parseTimeToMin9(startStr);
+					const endMin = parseTimeToMin9(endStr);
+					if (startMin == null || endMin == null) return;
+
+					const startLoc = r[6] || ''; // Spalte G
+					const endLoc = r[10] || ''; // Spalte K
+					const course = (r[4] || '').trim(); // Spalte E
+
+					if (!segmentsById9.has(id)) {
+						segmentsById9.set(id, []);
+					}
+
+					segmentsById9.get(id).push({
+						seq: ++seqCounter9,
+						startMin,
+						endMin,
+						startStr,
+						endStr,
+						startLoc,
+						endLoc,
+						course,
+						rowIndex: idx + 1 // Index in rows[]
+					});
+				});
+
+				// Pausen zwischen Dienstteilstücken ermitteln (30–120 Minuten)
+				const pauses9 = [];
+
+				for (const [id, segs] of segmentsById9.entries()) {
+					segs.sort((a, b) => a.seq - b.seq);
+
+					for (let i = 0; i < segs.length - 1; i++) {
+						const from = segs[i];
+						const to = segs[i + 1];
+
+						const gap = diffMinutesOverMidnight9(from.endMin, to.startMin);
+						if (gap == null) continue;
+
+						// Nur 30–120 Minuten berücksichtigen
+						if (gap >= 30 && gap <= 120) {
+							// Arbeitszeit vor der Pause:
+							// Standard: Spalte O -> J des Dienstteils "from"
+							// Sonderfall: genau 3 Dienstteile und dies ist die zweite Pause (i === 1),
+							// dann von O des ersten Dienstteils bis J des zweiten Dienstteils.
+							let workDurMin = null;
+							let workDurStr = '';
+							let workInRange = false;
+							let workUnknown = false;
+
+							let workStartRowIndex = from.rowIndex;
+							let workEndRowIndex = from.rowIndex;
+
+							if (segs.length === 3 && i === 1) {
+								// zweite Pause bei 3 Dienstteilen: 1. Teil (Index 0) -> 2. Teil (Index 1)
+								workStartRowIndex = segs[0].rowIndex;
+								workEndRowIndex = segs[1].rowIndex;
+							}
+
+							const rowStart = rows[workStartRowIndex] || null;
+							const rowEnd = rows[workEndRowIndex] || null;
+
+							if (rowStart && rowEnd) {
+								const workStartStr = rowStart[14]; // Spalte O
+								const workEndStr = rowEnd[9]; // Spalte J
+
+								const workStartMin = parseTimeToMin9(workStartStr);
+								const workEndMin = parseTimeToMin9(workEndStr);
+								const wDur = diffMinutesOverMidnight9(workStartMin, workEndMin);
+
+								if (wDur != null) {
+									workDurMin = wDur;
+									workDurStr = formatMinutesToHHMM9(wDur);
+									workInRange = wDur >= MIN_BV_9 && wDur <= MAX_BV_9;
+								} else {
+									workUnknown = true;
+								}
+							} else {
+								workUnknown = true;
+							}
+
+							pauses9.push({
+								id,
+								from,
+								to,
+								gap,
+								workDurMin,
+								workDurStr,
+								workInRange,
+								workUnknown
+							});
+						}
+					}
+				}
+
+				let pText = 'Pausen zwischen 30 und 120 Minuten:\n\n';
+
+				if (pauses9.length === 0) {
+					pText += 'Keine Pausen im Bereich 30–120 Minuten gefunden.';
+				} else {
+					const uniqueIds9 = [...new Set(pauses9.map(p => p.id))].sort(
+						(a, b) => a - b
+					);
+
+					uniqueIds9.forEach(id => {
+						const list = pauses9
+							.filter(p => p.id === id)
+							.sort((a, b) => a.from.startMin - b.from.startMin);
+
+						pText += `ID ${id}:\n`;
+
+						const hasBVConform = list.some(p => p.workInRange);
+
+						list.forEach(p => {
+							const from = p.from;
+							const to = p.to;
+
+							const fromCourse = formatCourse9(from.course);
+							const toCourse = formatCourse9(to.course);
+
+							const fromLoc = (from.endLoc || '').trim();
+							const toLoc = (to.startLoc || '').trim();
+							const pauseLoc = (fromLoc || toLoc).toUpperCase();
+
+							// Mindestpause je Pausenort
+							const isSpecial = SPECIAL_LOCATIONS9.includes(pauseLoc);
+							const requiredMin = isSpecial ? 39 : 33;
+							let pauseHint = '';
+
+							if (p.gap < requiredMin) {
+								pauseHint =
+									` (zu kurz, Mindestpause am Ort ${pauseLoc || 'unbekannt'}: ${requiredMin} min)`;
+							} else {
+								pauseHint =
+									` (Mindestpause erfüllt: ${requiredMin} min)`;
+							}
+
+							// Arbeitszeit vor der Pause (nur kommentieren, BV-Verstoß erst am Ende je Dienst)
+							let workHint = '';
+							if (p.workUnknown) {
+								workHint =
+									' (Arbeitszeit vor Pause aus Spalte O/J nicht auswertbar)';
+							} else if (p.workInRange) {
+								workHint =
+									` (Arbeitszeit vor Pause ${p.workDurStr} – im Bereich 03:30 bis 04:30 Stunden)`;
+							} else {
+								workHint =
+									` (Arbeitszeit vor Pause ${p.workDurStr} – außerhalb 03:30 bis 04:30 Stunden)`;
+							}
+
+							pText +=
+								`  Pause: ${from.endStr} ${fromLoc}${fromCourse}` +
+								` → ${to.startStr} ${toLoc}${toCourse}` +
+								` | ${p.gap} min` +
+								`${pauseHint}${workHint}\n`;
+						});
+
+						// Zusammenfassender BV-Hinweis pro Dienst
+						if (list.some(p => !p.workUnknown)) {
+							if (hasBVConform) {
+								pText +=
+									'  -> BV-Hinweis: Mindestens eine Pause mit vorangehender Arbeitszeit zwischen 03:30 und 04:30 Stunden vorhanden (BV-konform).\n\n';
+							} else {
+								pText +=
+									'  -> BV-Hinweis: Keine Pause mit vorangehender Arbeitszeit zwischen 03:30 und 04:30 Stunden – Dienst nicht BV-konform.\n\n';
+							}
+						} else {
+							pText +=
+								'  -> BV-Hinweis: Arbeitszeiten vor Pausen (Spalte O/J) nicht auswertbar.\n\n';
+						}
+					});
+				}
+
+				document.getElementById('pause-result').textContent = pText.trim();
+
+
+			};
+
+			reader.readAsArrayBuffer(file);
+		});
+	</script>
+
+	<!-- KI-Chat Logik -->
+	<!-- Gemeinsame KI-Hilfsfunktionen für Chat & Block 10 -->
+	<script>
+		// Backend-URL für alle KI-Anfragen
+		const CHAT_API_URL = 'https://dienstplan-ki-backend.onrender.com/chat';
+
+		// Mapping: Ergebnis-Element -> "sprechender Block-Name"
+		const BLOCK_LABELS = {
+			'plan-type-result': 'Dienstplan-Typ (Fahrzeug und Zeitraum)',
+			'count-result': 'Block 1 – Anzahl eindeutige Dienste',
+			'shared-result': 'Block 2 – Geteilte Dienste',
+			'reserve-result': 'Block 3 – Reserve Dienste',
+			'long-result': 'Block 4 – Dienste > 08:30h',
+			'loc-result': 'Block 5 – unterschiedliche Start- und End-Orte',
+			'segment-result': 'Block 6 – Dienstteilstücke > 04:30h und Linie/Kurs',
+			'shift-result': 'Block 7 – Schichtzuweisung anhand des Dienstbeginns',
+			'route-result': 'Block 8 – Dienste nach Linie/Kurs',
+			'pause-result': 'Block 9 – Pausen zwischen 30 und 120 Minuten'
+		};
+
+		const ANALYSIS_RESULT_IDS = Object.keys(BLOCK_LABELS);
+
+		// Texte der Blöcke 1–9 + Plan-Typ einsammeln
+		function collectAnalysisTextByBlock() {
+			const blocks = [];
+
+			ANALYSIS_RESULT_IDS.forEach(id => {
+				const el = document.getElementById(id);
+				if (!el) return;
+
+				const text = (el.textContent || '').trim();
+				if (!text) return;
+				if (/^Warte/i.test(text)) return;
+				if (text === '-') return;
+
+				blocks.push({
+					id,
+					label: BLOCK_LABELS[id] || id,
+					text
+				});
+			});
+
+			return blocks;
+		}
+
+		// Gemeinsamer Prompt für Chat & Block 10
+		function buildDienstplanPrompt(userQuestion) {
+			const question = (userQuestion || '').trim();
+			const blocks = collectAnalysisTextByBlock();
+
+			let contextText = '';
+			blocks.forEach(b => {
+				contextText += `${b.label}:\n${b.text}\n\n`;
+			});
+
+			return (
+				'Du bist eine spezialisierte KI, die Fragen zu einem ausgewerteten Dienstplan beantwortet.\n\n' +
+				'Unten findest du die Auswertungstexte aus mehreren Blöcken (z. B. Anzahl Dienste, geteilte Dienste, Reserve-Dienste,\n' +
+				'lange Dienste, Start-/End-Orte, Dienstteilstücke, Schichten, Linien/Kurse und Pausen). Zusätzlich ist der erkannte Dienstplan-Typ angegeben\n' +
+				'(z. B. Bus/Straßenbahn und Mo–Fr Schule/Ferien/Samstag/Sonntag). Jeder Block hat bereits berechnete Informationen (IDs, Schichten, Linien/Kurse, Pausen etc.).\n\n' +
+				'AUSWERTUNGSTEXTE NACH BLÖCKEN:\n\n' +
+				contextText +
+				'\nFRAGE DES BENUTZERS:\n' +
+				question +
+				'\n\nAUFGABE:\n' +
+				'- Beantworte die Benutzerfrage ausschließlich auf Basis dieser Auswertungen (keine eigenen Daten erfinden).\n' +
+				'- Beziehe dich bei Bedarf explizit auf die genannten Blöcke und IDs.\n' +
+				'- Antworte strukturiert und in gut lesbarem Deutsch.\n'
+			);
+		}
+	</script>
+
+	<!-- KI-Chat unten rechts – nutzt jetzt ebenfalls buildDienstplanPrompt -->
+	<script>
+		(function() {
+			const toggleBtn = document.getElementById('chat-toggle');
+			const chatWin = document.getElementById('chat-window');
+			const closeBtn = document.getElementById('chat-close');
+			const msgBox = document.getElementById('chat-messages');
+			const input = document.getElementById('chat-input');
+			const sendBtn = document.getElementById('chat-send');
+
+			if (!toggleBtn || !chatWin || !closeBtn || !msgBox || !input || !sendBtn) {
+				return;
+			}
+
+			function appendMessage(text, who) {
+				const div = document.createElement('div');
+				div.className = 'chat-message ' + (who === 'user' ? 'user' : 'bot');
+				const span = document.createElement('span');
+				span.textContent = text;
+				div.appendChild(span);
+				msgBox.appendChild(div);
+				msgBox.scrollTop = msgBox.scrollHeight;
+			}
+
+			function toggleChat() {
+				const visible = chatWin.style.display === 'flex';
+				chatWin.style.display = visible ? 'none' : 'flex';
+				if (!visible) {
+					input.focus();
+				}
+			}
+
+			async function sendMessage() {
+				const text = input.value.trim();
+				if (!text) return;
+
+				appendMessage(text, 'user');
+				input.value = '';
+
+				appendMessage('Einen Moment, ich werte den Dienstplan aus …', 'bot');
+
+				try {
+					const prompt = buildDienstplanPrompt(text);
+
+					const response = await fetch(CHAT_API_URL, {
+						method: 'POST',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify({ question: prompt })
+					});
+
+					if (!response.ok) {
+						appendMessage('Fehler bei der Kommunikation mit dem KI-Backend.', 'bot');
+						return;
+					}
+
+					const data = await response.json();
+					const answer = data.answer || 'Keine Antwort vom KI-Backend erhalten.';
+					appendMessage(answer, 'bot');
+				} catch (err) {
+					appendMessage('Es ist ein Verbindungsfehler zum KI-Backend aufgetreten.', 'bot');
+				}
+			}
+
+			toggleBtn.addEventListener('click', toggleChat);
+			closeBtn.addEventListener('click', () => {
+				chatWin.style.display = 'none';
+			});
+			sendBtn.addEventListener('click', sendMessage);
+			input.addEventListener('keydown', e => {
+				if (e.key === 'Enter' && !e.shiftKey) {
+					e.preventDefault();
+					sendMessage();
+				}
+			});
+		})();
+	</script>
+
+	<!-- Suchfunktion (mit Plan-Typ im Filter enthalten) -->
+	<script>
+		(function() {
+			const searchInput = document.getElementById('search-input');
+			const clearBtn = document.getElementById('search-clear');
+			const info = document.getElementById('search-info');
+
+			if (!searchInput || !info) return;
+
+			const resultIds = [
+				'plan-type-result',
+				'count-result',
+				'shared-result',
+				'reserve-result',
+				'long-result',
+				'loc-result',
+				'segment-result',
+				'shift-result',
+				'route-result',
+				'pause-result'
+			];
+
+			function applySearch() {
+				const term = searchInput.value.trim().toLowerCase();
+				let hitCount = 0;
+
+				resultIds.forEach(id => {
+					const el = document.getElementById(id);
+					if (!el || !el.parentElement) return;
+
+					const text = (el.textContent || '').toLowerCase();
+
+					if (!term) {
+						el.parentElement.style.display = '';
+						return;
+					}
+
+					if (text.includes(term)) {
+						el.parentElement.style.display = '';
+						hitCount++;
+					} else {
+						el.parentElement.style.display = 'none';
+					}
+				});
+
+				if (!term) {
+					info.textContent = 'Filter ist deaktiviert.';
+				} else if (hitCount === 0) {
+					info.textContent = `Kein Block enthält „${searchInput.value}“.`;
+				} else if (hitCount === 1) {
+					info.textContent = `1 Block enthält „${searchInput.value}“.`;
+				} else {
+					info.textContent = `${hitCount} Blöcke enthalten „${searchInput.value}“.`;
+				}
+			}
+
+			searchInput.addEventListener('input', applySearch);
+			if (clearBtn) {
+				clearBtn.addEventListener('click', () => {
+					searchInput.value = '';
+					applySearch();
+				});
+			}
+		})();
+	</script>
+
+	<!-- Block 10 – KI-gestützte Auswertung, nutzt ebenfalls buildDienstplanPrompt -->
+	<script>
+		(function() {
+			const askBtn = document.getElementById('plan-ask');
+			const questionEl = document.getElementById('plan-question');
+			const resultEl = document.getElementById('plan-answer');
+			if (!askBtn || !questionEl || !resultEl) return;
+
+			async function askPlanQuestion() {
+				const userQuestion = questionEl.value.trim();
+				if (!userQuestion) {
+					resultEl.textContent =
+						'Bitte geben Sie eine Frage ein (z. B. „Alles zu ID 122“).';
+					return;
+				}
+
+				resultEl.textContent = 'Die KI wertet den Dienstplan aus …';
+
+				try {
+					const prompt = buildDienstplanPrompt(userQuestion);
+
+					const response = await fetch(CHAT_API_URL, {
+						method: 'POST',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify({ question: prompt })
+					});
+
+					if (!response.ok) {
+						resultEl.textContent =
+							'Fehler bei der Kommunikation mit dem KI-Backend.';
+						return;
+					}
+
+					const data = await response.json();
+					const answer = data.answer || 'Keine Antwort vom KI-Backend erhalten.';
+					resultEl.textContent = answer;
+				} catch (err) {
+					resultEl.textContent =
+						'Es ist ein Verbindungsfehler zum KI-Backend aufgetreten.';
+				}
+			}
+
+			askBtn.addEventListener('click', askPlanQuestion);
+		})();
+	</script>
 </body>
+
 </html>
