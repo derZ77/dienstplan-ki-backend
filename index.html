@@ -774,30 +774,46 @@
 				document.getElementById('segment-result').textContent = segTxt.trim();
 
 
-				// Block 7: Schichtzuweisung inkl. separater Ausweisung geteilter Dienste (GF1, GF2, ...)
-				const shiftRules = [
-					{ name: 'F1', start: 170, end: 270 },
-					{ name: 'F2', start: 271, end: 371 },
-					{ name: 'F3', start: 372, end: 614 },
-					{ name: 'S1', start: 615, end: 779 },
-					{ name: 'S2', start: 780, end: 1159 },
-					{ name: 'N', start: 1160, end: 1440 }
-				];
+// Block 7: Schichtzuweisung inkl. separater Ausweisung geteilter Dienste (GF1, GF2, ...)
+				const isWeekendPlan = (zeitraum === 'Samstag' || zeitraum === 'Sonntag');
 
-				const shiftCount = {}; // alle Dienste nach F1, F2, ...
-				const sharedShiftCount = {}; // nur geteilte Dienste, z.B. GF1, GF2, ...
-				const assignments = []; // je Dienst: zugewiesene Schicht
+				// Schichtregeln: Wochenende mit WE-F1/WE-F2, sonst F1/F2/F3
+				const shiftRules = isWeekendPlan
+					? [
+						// Wochenende (Samstag/Sonntag)
+						// WE-F1: 02:50–05:59  → 170–360 (Ende exklusiv, daher 360)
+						{ name: 'WE-F1', start: 170, end: 360 },
+						// WE-F2: 06:00–10:14  → 360–615 (Ende exklusiv, daher 615)
+						{ name: 'WE-F2', start: 360, end: 615 },
+						{ name: 'S1',    start: 615, end: 779 },
+						{ name: 'S2',    start: 780, end: 1159 },
+						{ name: 'N',     start: 1160, end: 1440 }
+					]
+					: [
+						// Standard (Mo–Fr)
+						{ name: 'F1', start: 170, end: 270 },
+						{ name: 'F2', start: 271, end: 371 },
+						{ name: 'F3', start: 372, end: 614 },
+						{ name: 'S1', start: 615, end: 779 },
+						{ name: 'S2', start: 780, end: 1159 },
+						{ name: 'N',  start: 1160, end: 1440 }
+					];
+
+				const shiftCount = {};        // alle Dienste nach F1/F2/... bzw. WE-F1/WE-F2/...
+				const sharedShiftCount = {};  // nur geteilte Dienste, z.B. GF1, GF2 oder GWE-F1, ...
+				const assignments = [];       // je Dienst: zugewiesene Schicht
 				let lastId7 = null;
 
 				// Set der geteilten Dienste (aus Block 2)
 				const sharedIdSet = new Set([...ids].filter(id => isSharedService(id)));
 
 				rows.slice(1).forEach(r => {
+					// Dienst-ID merken
 					if (/^[0-9]+$/.test(r[2])) {
 						lastId7 = parseInt(r[2], 10);
 					}
 
-					const tm = r[5]; // Spalte F: Dienstbeginn
+					const tm = r[14]; // Spalte O: Dienstbeginn
 					if (lastId7 != null && typeof tm === 'string') {
 						const m = tm.match(/^(\d{1,2}):(\d{2})$/);
 						if (m) {
@@ -810,19 +826,19 @@
 								const isShared = sharedIdSet.has(lastId7);
 								let finalName = baseName;
 
-								// geteilte Dienste bekommen eigene Schichtlage GF1, GF2, ...
+								// geteilte Dienste bekommen eigene Schichtlage GF1, GF2 bzw. GWE-F1, ...
 								if (isShared && baseName !== 'Unbekannte') {
 									finalName = 'G' + baseName;
 								}
 
 								assignments.push({ id: lastId7, shift: finalName, isShared });
 
-								// Gesamtzählung nach Grund-Schichtlage (F1, F2, ...), aber OHNE geteilte Dienste
+								// Gesamtzählung nach Grund-Schichtlage (F1/F2/F3 oder WE-F1/WE-F2, ...), aber OHNE geteilte Dienste
 								if (!isShared) {
 									shiftCount[baseName] = (shiftCount[baseName] || 0) + 1;
 								}
 
-								// separate Zählung geteilte Dienste nach GF1, GF2, ...
+								// separate Zählung geteilte Dienste nach GF1, GF2, ... / GWE-F1, ...
 								if (isShared && baseName !== 'Unbekannte') {
 									sharedShiftCount[finalName] = (sharedShiftCount[finalName] || 0) + 1;
 								}
@@ -831,14 +847,20 @@
 					}
 				});
 
-				let shText = 'Schichtzählung (nicht geteilte Dienste nach F1, F2, F3, S1, S2, N):\n';
+				// Überschrift je nach Plan-Typ anpassen
+				let shText = isWeekendPlan
+					? 'Schichtzählung (nicht geteilte Dienste nach WE-F1, WE-F2, S1, S2, N):\n'
+					: 'Schichtzählung (nicht geteilte Dienste nach F1, F2, F3, S1, S2, N):\n';
+
+				// Nicht geteilte Dienste je Schichtlage
 				Object.entries(shiftCount)
 					.sort((a, b) => a[0].localeCompare(b[0], 'de'))
 					.forEach(([name, count]) => {
 						shText += `${name}: ${count}\n`;
 					});
 
-				shText += '\nGeteilte Dienste mit separater Schichtlage (GF1, GF2, ...):\n';
+				// Geteilte Dienste mit eigener Schichtlage
+				shText += '\nGeteilte Dienste mit separater Schichtlage (GF1, GF2, ... bzw. GWE-F1, ...):\n';
 				const sharedKeys = Object.keys(sharedShiftCount);
 				if (sharedKeys.length === 0) {
 					shText += 'Keine geteilten Dienste mit zugewiesener Schichtlage gefunden.\n';
@@ -850,6 +872,7 @@
 						});
 				}
 
+				// Auflistung je Dienst-ID
 				shText += '\nZuteilung je Dienst-ID:\n';
 				assignments
 					.sort((a, b) => a.id - b.id)
