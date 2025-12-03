@@ -67,14 +67,16 @@
 		}
 
 		/* Hervorhebung für nicht BV-konforme Dienste in Block 9 */
-.result .bv-not-ok {
-	background: #ffebee;          /* leichtes Rot */
-	border-left: 4px solid #c62828;
-	padding: 6px 10px;
-	margin: 6px 0;
-	font-weight: 500;
-	color: #b71c1c;              /* dunkler Rotton für Text */
-}
+		.result .bv-not-ok {
+			background: #ffebee;
+			/* leichtes Rot */
+			border-left: 4px solid #c62828;
+			padding: 6px 10px;
+			margin: 6px 0;
+			font-weight: 500;
+			color: #b71c1c;
+			/* dunkler Rotton für Text */
+		}
 
 		input[type="file"] {
 			margin-top: 0.5rem;
@@ -784,34 +786,34 @@
 				document.getElementById('segment-result').textContent = segTxt.trim();
 
 
-// Block 7: Schichtzuweisung inkl. separater Ausweisung geteilter Dienste (GF1, GF2, ...)
+				// Block 7: Schichtzuweisung inkl. separater Ausweisung geteilter Dienste (GF1, GF2, ...)
 				const isWeekendPlan = (zeitraum === 'Samstag' || zeitraum === 'Sonntag');
 
 				// Schichtregeln: Wochenende mit WE-F1/WE-F2, sonst F1/F2/F3
-				const shiftRules = isWeekendPlan
-					? [
+				const shiftRules = isWeekendPlan ?
+					[
 						// Wochenende (Samstag/Sonntag)
 						// WE-F1: 02:50–05:59  → 170–360 (Ende exklusiv, daher 360)
 						{ name: 'WE-F1', start: 170, end: 360 },
 						// WE-F2: 06:00–10:14  → 360–615 (Ende exklusiv, daher 615)
 						{ name: 'WE-F2', start: 360, end: 615 },
-						{ name: 'S1',    start: 615, end: 779 },
-						{ name: 'S2',    start: 780, end: 1159 },
-						{ name: 'N',     start: 1160, end: 1440 }
-					]
-					: [
+						{ name: 'S1', start: 615, end: 779 },
+						{ name: 'S2', start: 780, end: 1159 },
+						{ name: 'N', start: 1160, end: 1440 }
+					] :
+					[
 						// Standard (Mo–Fr)
 						{ name: 'F1', start: 170, end: 270 },
 						{ name: 'F2', start: 271, end: 371 },
 						{ name: 'F3', start: 372, end: 614 },
 						{ name: 'S1', start: 615, end: 779 },
 						{ name: 'S2', start: 780, end: 1159 },
-						{ name: 'N',  start: 1160, end: 1440 }
+						{ name: 'N', start: 1160, end: 1440 }
 					];
 
-				const shiftCount = {};        // alle Dienste nach F1/F2/... bzw. WE-F1/WE-F2/...
-				const sharedShiftCount = {};  // nur geteilte Dienste, z.B. GF1, GF2 oder GWE-F1, ...
-				const assignments = [];       // je Dienst: zugewiesene Schicht
+				const shiftCount = {}; // alle Dienste nach F1/F2/... bzw. WE-F1/WE-F2/...
+				const sharedShiftCount = {}; // nur geteilte Dienste, z.B. GF1, GF2 oder GWE-F1, ...
+				const assignments = []; // je Dienst: zugewiesene Schicht
 				let lastId7 = null;
 
 				// Set der geteilten Dienste (aus Block 2)
@@ -858,9 +860,9 @@
 				});
 
 				// Überschrift je nach Plan-Typ anpassen
-				let shText = isWeekendPlan
-					? 'Schichtzählung (nicht geteilte Dienste nach WE-F1, WE-F2, S1, S2, N):\n'
-					: 'Schichtzählung (nicht geteilte Dienste nach F1, F2, F3, S1, S2, N):\n';
+				let shText = isWeekendPlan ?
+					'Schichtzählung (nicht geteilte Dienste nach WE-F1, WE-F2, S1, S2, N):\n' :
+					'Schichtzählung (nicht geteilte Dienste nach F1, F2, F3, S1, S2, N):\n';
 
 				// Nicht geteilte Dienste je Schichtlage
 				Object.entries(shiftCount)
@@ -1040,9 +1042,6 @@
 					return ` (${c})`;
 				}
 
-				function isIgnoredSplitService9(id) {
-					return (id >= 40 && id <= 59) || (id >= 140 && id <= 159);
-				}
 
 				const SPECIAL_LOCATIONS9 = ['HLZ', 'TGR', 'LGR'];
 				const MIN_BV_9 = 3.5 * 60; // 210
@@ -1070,8 +1069,8 @@
 
 					const id = currentId9;
 
-					// geteilte Dienste 40–59 und 140–159 ignorieren
-					if (isIgnoredSplitService9(id)) return;
+					// alle geteilten Dienste (wie in Block 2 definiert) ignorieren
+					if (isSharedService(id)) return;
 
 					const startStr = r[5]; // Spalte F
 					const endStr = r[9]; // Spalte J
