@@ -2742,12 +2742,12 @@
 			'real-driving-time-result': 'Block 7 – Lenkzeit real vor/nach Pause laut Wagenkarte',
 			'shift-result': 'Block 8 – Schichtzuweisung anhand des Dienstbeginns',
 			'route-result': 'Block 9 – Dienste nach Linie/Kurs',
-			'pause-result': 'Block 10 – Pausen zwischen 30 und 120 Minuten'
+			'pause-result': 'Block 10 – Pausen, Dienstunterbrechungen und BV-Hinweise'
 		};
 
 		const ANALYSIS_RESULT_IDS = Object.keys(BLOCK_LABELS);
 
-		// Texte der Blöcke 1–9 + Plan-Typ einsammeln
+		// Texte der Blöcke 1–10 + Plan-Typ einsammeln
 		function collectAnalysisTextByBlock() {
 			const blocks = [];
 
@@ -2782,9 +2782,14 @@
 
 			return (
 				'Du bist eine spezialisierte KI, die Fragen zu einem ausgewerteten Dienstplan beantwortet.\n\n' +
-				'Unten findest du die Auswertungstexte aus mehreren Blöcken (z. B. Anzahl Dienste, geteilte Dienste, Reserve-Dienste,\n' +
-				'lange Dienste, Start-/End-Orte, Dienstteilstücke, Schichten, Linien/Kurse und Pausen). Zusätzlich ist der erkannte Dienstplan-Typ angegeben\n' +
-				'(z. B. Bus/Straßenbahn und Mo–Fr Schule/Ferien/Samstag/Sonntag). Jeder Block hat bereits berechnete Informationen (IDs, Schichten, Linien/Kurse, Pausen etc.).\n\n' +
+				'Unten findest du die Auswertungstexte der Blöcke 1–10 sowie den erkannten Dienstplan-Typ.\n' +
+				'Die Blöcke enthalten bereits berechnete Informationen wie IDs, Schichten, Linien/Kurse, Fahrzeiten, Dienstteilstücke, Pausen und BV-Hinweise.\n\n' +
+				'Wichtige fachliche Einordnung für Wagenkarten:\n' +
+				'- Block 6 beschreibt Arbeitszeit-/Dienstteilstücke vor oder nach einer Pause bzw. Dienstunterbrechung.\n' +
+				'- Block 7 beschreibt die berechnete Fahr-/Leerfahrzeit vor oder nach einer Pause bzw. Dienstunterbrechung laut Wagenkarte; der offizielle Kopfwert L5 wird dort separat ausgewiesen.\n' +
+				'- Block 10 beschreibt Pausen, geteilte Dienstunterbrechungen und BV-Hinweise.\n' +
+				'- Bei Wagenkarten dürfen Block 6 (Arbeitszeit/Dienstteilstücke) und Block 7 (Fahr-/Leerfahrzeit) nicht miteinander verwechselt oder vermischt werden.\n\n' +
+				'Zusätzlich ist der erkannte Dienstplan-Typ angegeben (z. B. Bus/Straßenbahn und Mo–Fr Schule/Ferien/Samstag/Sonntag).\n\n' +
 				'AUSWERTUNGSTEXTE NACH BLÖCKEN:\n\n' +
 				contextText +
 				'\nFRAGE DES BENUTZERS:\n' +
@@ -2792,6 +2797,7 @@
 				'\n\nAUFGABE:\n' +
 				'- Beantworte die Benutzerfrage ausschließlich auf Basis dieser Auswertungen (keine eigenen Daten erfinden).\n' +
 				'- Beziehe dich bei Bedarf explizit auf die genannten Blöcke und IDs.\n' +
+				'- Trenne bei Wagenkarten sauber zwischen Arbeitszeit-/Dienstteilstücken, Fahr-/Leerfahrzeit und Pausen-/BV-Hinweisen.\n' +
 				'- Antworte strukturiert und in gut lesbarem Deutsch.\n'
 			);
 		}
